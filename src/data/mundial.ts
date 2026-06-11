@@ -1,0 +1,82 @@
+export type Team = {
+  id: number
+  name: string
+  group: string
+  flag: string
+  played: number
+  won: number
+  drawn: number
+  lost: number
+  goalsFor: number
+  goalsAgainst: number
+  points: number
+}
+
+export type Player = {
+  id: number
+  name: string
+  team: string
+  position: string
+  goals: number
+  assists: number
+  matches: number
+}
+
+export type Match = {
+  id: number
+  home: string
+  away: string
+  homeScore: number | null
+  awayScore: number | null
+  date: string
+  stage: string
+  status: "Finalizado" | "Programado"
+}
+
+export type Prediction = {
+  id: number
+  home: string
+  away: string
+  homeProb: number
+  drawProb: number
+  awayProb: number
+  predictedWinner: string
+}
+
+export const teams: Team[] = [
+  { id: 1, name: "Argentina", group: "A", flag: "🇦🇷", played: 3, won: 3, drawn: 0, lost: 0, goalsFor: 8, goalsAgainst: 2, points: 9 },
+  { id: 2, name: "Francia", group: "B", flag: "🇫🇷", played: 3, won: 2, drawn: 1, lost: 0, goalsFor: 7, goalsAgainst: 3, points: 7 },
+  { id: 3, name: "Brasil", group: "C", flag: "🇧🇷", played: 3, won: 2, drawn: 0, lost: 1, goalsFor: 6, goalsAgainst: 3, points: 6 },
+  { id: 4, name: "España", group: "D", flag: "🇪🇸", played: 3, won: 2, drawn: 1, lost: 0, goalsFor: 9, goalsAgainst: 2, points: 7 },
+  { id: 5, name: "Alemania", group: "A", flag: "🇩🇪", played: 3, won: 1, drawn: 1, lost: 1, goalsFor: 5, goalsAgainst: 4, points: 4 },
+  { id: 6, name: "Inglaterra", group: "B", flag: "🏴", played: 3, won: 2, drawn: 0, lost: 1, goalsFor: 6, goalsAgainst: 4, points: 6 },
+  { id: 7, name: "Portugal", group: "C", flag: "🇵🇹", played: 3, won: 1, drawn: 2, lost: 0, goalsFor: 5, goalsAgainst: 3, points: 5 },
+  { id: 8, name: "México", group: "D", flag: "🇲🇽", played: 3, won: 1, drawn: 0, lost: 2, goalsFor: 3, goalsAgainst: 5, points: 3 },
+]
+
+export const players: Player[] = [
+  { id: 1, name: "Lionel Messi", team: "Argentina", position: "Delantero", goals: 5, assists: 3, matches: 3 },
+  { id: 2, name: "Kylian Mbappé", team: "Francia", position: "Delantero", goals: 4, assists: 2, matches: 3 },
+  { id: 3, name: "Vinícius Jr.", team: "Brasil", position: "Extremo", goals: 3, assists: 4, matches: 3 },
+  { id: 4, name: "Lamine Yamal", team: "España", position: "Extremo", goals: 4, assists: 3, matches: 3 },
+  { id: 5, name: "Harry Kane", team: "Inglaterra", position: "Delantero", goals: 3, assists: 1, matches: 3 },
+  { id: 6, name: "Cristiano Ronaldo", team: "Portugal", position: "Delantero", goals: 2, assists: 2, matches: 3 },
+  { id: 7, name: "Jamal Musiala", team: "Alemania", position: "Mediocampista", goals: 2, assists: 3, matches: 3 },
+  { id: 8, name: "Hirving Lozano", team: "México", position: "Extremo", goals: 2, assists: 1, matches: 3 },
+]
+
+export const matches: Match[] = [
+  { id: 1, home: "Argentina", away: "Alemania", homeScore: 3, awayScore: 1, date: "2026-06-12", stage: "Fase de grupos", status: "Finalizado" },
+  { id: 2, home: "Francia", away: "Inglaterra", homeScore: 2, awayScore: 2, date: "2026-06-13", stage: "Fase de grupos", status: "Finalizado" },
+  { id: 3, home: "Brasil", away: "Portugal", homeScore: 1, awayScore: 1, date: "2026-06-14", stage: "Fase de grupos", status: "Finalizado" },
+  { id: 4, home: "España", away: "México", homeScore: 4, awayScore: 0, date: "2026-06-15", stage: "Fase de grupos", status: "Finalizado" },
+  { id: 5, home: "Argentina", away: "Francia", homeScore: null, awayScore: null, date: "2026-07-02", stage: "Cuartos de final", status: "Programado" },
+  { id: 6, home: "Brasil", away: "España", homeScore: null, awayScore: null, date: "2026-07-03", stage: "Cuartos de final", status: "Programado" },
+]
+
+export const predictions: Prediction[] = [
+  { id: 1, home: "Argentina", away: "Francia", homeProb: 48, drawProb: 24, awayProb: 28, predictedWinner: "Argentina" },
+  { id: 2, home: "Brasil", away: "España", homeProb: 35, drawProb: 25, awayProb: 40, predictedWinner: "España" },
+  { id: 3, home: "Inglaterra", away: "Portugal", homeProb: 42, drawProb: 28, awayProb: 30, predictedWinner: "Inglaterra" },
+  { id: 4, home: "Alemania", away: "México", homeProb: 55, drawProb: 23, awayProb: 22, predictedWinner: "Alemania" },
+]
