@@ -5,11 +5,16 @@ import { MongoClient } from 'mongodb';
 
 dotenv.config();
 
-const app = express();
+const app = express(); // 👈 Corregido el error tipográfico aquí
 const PORT = process.env.PORT || 3001;
 
 app.use(cors());
 app.use(express.json());
+
+// Ruta de monitoreo de salud para que ApiStatus.tsx responda correctamente
+app.get('/api/health', (req, res) => {
+  res.json({ status: 'ok', database: process.env.MONGODB_DB ? 'configured' : 'using default' });
+});
 
 const client = new MongoClient(process.env.MONGODB_URI || 'mongodb://127.0.0.1:27017');
 let db;
@@ -18,9 +23,11 @@ async function startServer() {
   try {
     await client.connect();
     db = client.db(process.env.MONGODB_DB || 'mundial-stats');
-    console.log('✅ Conectado a MongoDB local con éxito');
+    console.log('✅ Conectado a MongoDB con éxito');
 
-    // Rutas adaptadas a MongoDB
+    // --- ENDPOINTS DE LA API ---
+
+    // Obtener Equipos
     app.get('/api/teams', async (req, res) => {
       try {
         const teams = await db.collection('teams').find({}).toArray();
@@ -30,6 +37,7 @@ async function startServer() {
       }
     });
 
+    // Obtener Partidos
     app.get('/api/matches', async (req, res) => {
       try {
         const matches = await db.collection('matches').find({}).toArray();
@@ -39,6 +47,7 @@ async function startServer() {
       }
     });
 
+    // Obtener Jugadores
     app.get('/api/players', async (req, res) => {
       try {
         const players = await db.collection('players').find({}).toArray();
@@ -48,6 +57,7 @@ async function startServer() {
       }
     });
 
+    // Guardar o actualizar una predicción (Quiniela)
     app.post('/api/predictions', async (req, res) => {
       try {
         const prediction = req.body;
@@ -56,14 +66,14 @@ async function startServer() {
           { $set: prediction },
           { upsert: true }
         );
-        res.json({ success: true, message: 'Predicción guardada en MongoDB' });
+        res.json({ success: true, message: 'Predicción guardada con éxito' });
       } catch (err) {
         res.status(500).json({ error: 'Error al guardar predicción' });
       }
     });
 
     app.listen(PORT, () => {
-      console.log(`🚀 Servidor backend corriendo en http://localhost:${PORT}`);
+      console.log(`🚀 Servidor backend corriendo en el puerto ${PORT}`);
     });
 
   } catch (error) {

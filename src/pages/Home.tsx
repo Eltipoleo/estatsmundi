@@ -17,7 +17,6 @@ export default function Home() {
   useEffect(() => {
     async function loadHomeData() {
       try {
-        // Consultas directas a tu API propia de MongoDB
         const teams = await apiFetch<Team[]>("/api/teams")
         if (Array.isArray(teams) && teams.length > 0) setTeamData(teams)
       } catch (err) {
@@ -42,11 +41,25 @@ export default function Home() {
     void loadHomeData()
   }, [])
 
-  const topScorers = [...playerData].sort((a, b) => b.goals - a.goals).slice(0, 5)
-  const goalsData = topScorers.map((p) => ({ name: p.name.split(" ").slice(-1)[0], goles: p.goals }))
-  const pointsData = [...teamData].sort((a, b) => b.points - a.points).slice(0, 4).map((t) => ({ name: t.name, value: t.points }))
-  const totalGoals = teamData.reduce((s, t) => s + t.goalsFor, 0)
-  const finished = matchData.filter((m) => m.status === "Finalizado").length
+  // FILTRO SEGURO: Evita errores si un jugador en la BD viene sin nombre o corrupto
+  const topScorers = [...playerData]
+    .filter((p) => p && typeof p.name === "string")
+    .sort((a, b) => b.goals - a.goals)
+    .slice(0, 5)
+
+  const goalsData = topScorers.map((p) => ({ 
+    name: p.name ? p.name.split(" ").slice(-1)[0] : "Jugador", 
+    goles: p.goals 
+  }))
+
+  const pointsData = [...teamData]
+    .filter((t) => t && typeof t.name === "string")
+    .sort((a, b) => b.points - a.points)
+    .slice(0, 4)
+    .map((t) => ({ name: t.name, value: t.points }))
+
+  const totalGoals = teamData.reduce((s, t) => s + (t.goalsFor || 0), 0)
+  const finished = matchData.filter((m) => m && m.status === "Finalizado").length
 
   return (
     <div className="flex flex-col gap-6">
@@ -79,7 +92,8 @@ export default function Home() {
       <section className="grid gap-6 lg:grid-cols-2">
         <Card>
           <CardHeader title="Goleadores" subtitle="Top 5 máximos anotadores" icon={<Goal size={18} />} />
-          <div className="h-72 p-4">
+          {/* Contenedor con altura mínima forzada para evitar el error de ResponsiveContainer */}
+          <div className="h-72 p-4" style={{ minHeight: "300px", width: "100%" }}>
             <ResponsiveContainer width="100%" height="100%">
               <BarChart data={goalsData}>
                 <XAxis dataKey="name" tick={{ fontSize: 12 }} />
@@ -93,7 +107,8 @@ export default function Home() {
 
         <Card>
           <CardHeader title="Puntos por equipo" subtitle="Líderes del torneo" icon={<TrendingUp size={18} />} />
-          <div className="h-72 p-4">
+          {/* Contenedor con altura mínima forzada */}
+          <div className="h-72 p-4" style={{ minHeight: "300px", width: "100%" }}>
             <ResponsiveContainer width="100%" height="100%">
               <PieChart>
                 <Pie data={pointsData} dataKey="value" nameKey="name" cx="50%" cy="50%" outerRadius={90} label>
