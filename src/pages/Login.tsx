@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 
 export default function Login() {
   const [email, setEmail] = useState('');
@@ -7,6 +7,12 @@ export default function Login() {
   const [loading, setLoading] = useState(false);
 
   const API_URL = 'https://estatsmundi.onrender.com/api';
+
+  // 🧹 LIMPIEZA AUTOMÁTICA AL ENTRAR AL LOGIN
+  useEffect(() => {
+    localStorage.removeItem('token');
+    localStorage.removeItem('user');
+  }, []);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -26,24 +32,28 @@ export default function Login() {
         throw new Error(data.error || 'Credenciales incorrectas');
       }
 
-      // Validar si la cuenta está verificada antes de dejarlo pasar
-      if (data.user && !data.user.emailVerified) {
-        throw new Error('Tu cuenta aún no ha sido activada. Revisa tu correo electrónico.');
+      // 🛡️ SI LA CUENTA NO ESTÁ ACTIVADA, DETENER EL ACCESO
+      if (data.user && data.user.emailVerified === false) {
+        throw new Error('Tu cuenta aún no ha sido activada. Por favor, revisa tu correo electrónico.');
       }
 
+      // 🏆 MAPEO ESTRICTO PARA EVITAR EL "Hola, Usuario"
       const safeUser = {
-        name: data.user?.name || 'Usuario',
+        name: data.user?.name || 'Usuario Registrado', // Toma el nombre real desde MongoDB
         email: data.user?.email || email.toLowerCase(),
         role: data.user?.role || 'usuario'
       };
 
+      // Forzar rol de administrador en cliente si es tu correo maestro
       if (email.toLowerCase() === 'joserty83@gmail.com') {
         safeUser.role = 'administrador';
       }
 
+      // Guardar sesión limpia
       localStorage.setItem('token', data.token);
       localStorage.setItem('user', JSON.stringify(safeUser));
 
+      // Redireccionar al Home actualizando el estado de la aplicación
       window.location.href = '/';
     } catch (err: any) {
       console.error('Error al iniciar sesión:', err);
@@ -63,7 +73,7 @@ export default function Login() {
         </div>
 
         {error && (
-          <div style={{ backgroundColor: '#fef2f2', border: '1px solid #fca5a5', color: '#b91c1c', padding: '10px', borderRadius: '6px', fontSize: '14px', marginBottom: '15px', fontWeight: 500 }}>
+          <div style={{ backgroundColor: '#fef2f2', border: '1px solid #fca5a5', color: '#b91c1c', padding: '10px', borderRadius: '6px', fontSize: '14px', marginBottom: '15px', fontWeight: 500, lineHeight: '1.4' }}>
             {error}
           </div>
         )}
@@ -84,7 +94,6 @@ export default function Login() {
           </button>
         </form>
 
-        {/* 🔘 BOTÓN DE REGISTRO REINCORPORADO */}
         <div style={{ marginTop: '20px', textAlign: 'center', borderTop: '1px solid #f1f5f9', paddingTop: '15px' }}>
           <p style={{ fontSize: '13px', color: '#64748b', margin: '0 0 8px 0' }}>¿No tienes una cuenta activa?</p>
           <button 
