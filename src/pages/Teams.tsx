@@ -1,70 +1,59 @@
-import { useEffect, useState } from "react"
-import { apiFetch } from "../lib/api"
-import { teams as fallbackTeams, type Team } from "../data/mundial"
+import { useEffect, useState } from 'react';
 
-export default function Teams() {
-  const [teams, setTeams] = useState<Team[]>(fallbackTeams)
-  const [loading, setLoading] = useState(true)
+interface Team {
+  _id: string;
+  name: string;
+  points: number;
+}
+
+export default function Equipos() {
+  const [teams, setTeams] = useState<Team[]>([]);
+  const [loading, setLoading] = useState(true);
+  const API_URL = 'https://estatsmundi.onrender.com/api';
 
   useEffect(() => {
-    async function loadTeams() {
-      try {
-        const data = await apiFetch<Team[]>("/api/teams")
-        if (Array.isArray(data) && data.length > 0) {
-          setTeams(data)
+    fetch(`${API_URL}/teams`)
+      .then(res => res.json())
+      .then(data => {
+        if (Array.isArray(data)) {
+          const sorted = data.sort((a, b) => (b.points || 0) - (a.points || 0));
+          setTeams(sorted);
         }
-      } catch (err) {
-        console.error("Error al cargar equipos de MongoDB:", err)
-      } finally {
-        setLoading(false)
-      }
-    }
-    void loadTeams()
-  }, [])
-
-  if (loading) {
-    return <div className="p-6 text-sm text-muted-foreground">Cargando equipos...</div>
-  }
+      })
+      .catch(err => console.error(err))
+      .finally(() => setLoading(false));
+  }, []);
 
   return (
-    <div className="flex flex-col gap-4">
-      <div>
-        <h1 className="text-2xl font-bold">Equipos participantes</h1>
-        <p className="text-sm text-muted-foreground">Tabla de posiciones y rendimiento en tiempo real.</p>
-      </div>
-
-      <div className="overflow-x-auto rounded-xl border bg-card">
-        <table className="w-full text-left text-sm">
-          <thead className="border-b bg-muted/50 text-xs font-medium uppercase text-muted-foreground">
-            <tr>
-              <th className="px-4 py-3">Selección</th>
-              <th className="px-4 py-3 text-center">PJ</th>
-              <th className="px-4 py-3 text-center">G</th>
-              <th className="px-4 py-3 text-center">E</th>
-              <th className="px-4 py-3 text-center">P</th>
-              <th className="px-4 py-3 text-center">GF</th>
-              <th className="px-4 py-3 text-center">GC</th>
-              <th className="px-4 py-3 text-center font-bold text-primary">PTS</th>
-            </tr>
-          </thead>
-          <tbody className="divide-y">
-            {teams
-              .sort((a, b) => b.points - a.points || b.goalsFor - b.goalsAgainst - (a.goalsFor - a.goalsAgainst))
-              .map((team) => (
-                <tr key={team.id} className="hover:bg-muted/30 transition-colors">
-                  <td className="px-4 py-3 font-medium">{team.name}</td>
-                  <td className="px-4 py-3 text-center">{team.played}</td>
-                  <td className="px-4 py-3 text-center">{team.won}</td>
-                  <td className="px-4 py-3 text-center">{team.drawn}</td>
-                  <td className="px-4 py-3 text-center">{team.lost}</td>
-                  <td className="px-4 py-3 text-center">{team.goalsFor}</td>
-                  <td className="px-4 py-3 text-center">{team.goalsAgainst}</td>
-                  <td className="px-4 py-3 text-center font-bold text-primary">{team.points}</td>
+    <div style={{ maxWidth: '800px', margin: '30px auto', padding: '20px', fontFamily: 'sans-serif' }}>
+      <div style={{ background: '#fff', border: '1px solid #e2e8f0', borderRadius: '12px', padding: '25px', boxShadow: '0 4px 6px -1px rgb(0 0 0 / 0.05)' }}>
+        <h2 style={{ color: '#0b6e4f', margin: '0 0 20px 0' }}>🏆 Tabla General de Equipos</h2>
+        
+        {loading ? (
+          <p style={{ color: '#64748b' }}>Cargando listado de escuadras...</p>
+        ) : teams.length === 0 ? (
+          <p style={{ color: '#64748b' }}>No hay equipos registrados por el administrador.</p>
+        ) : (
+          <table style={{ width: '100%', borderCollapse: 'collapse', textAlign: 'left' }}>
+            <thead>
+              <tr style={{ borderBottom: '2px solid #e2e8f0', color: '#475569', fontWeight: '600' }}>
+                <th style={{ padding: '12px', width: '60px', textAlign: 'center' }}>Posición</th>
+                <th style={{ padding: '12px' }}>Club / Selección</th>
+                <th style={{ padding: '12px', textAlign: 'center', width: '100px' }}>Puntos Totales</th>
+              </tr>
+            </thead>
+            <tbody>
+              {teams.map((team, idx) => (
+                <tr key={team._id} style={{ borderBottom: '1px solid #f1f5f9', background: idx === 0 ? '#f0fdf4' : idx % 2 === 0 ? '#f8fafc' : '#fff' }}>
+                  <td style={{ padding: '14px', textAlign: 'center', fontWeight: 'bold', color: idx === 0 ? '#166534' : '#64748b' }}>{idx + 1}</td>
+                  <td style={{ padding: '14px', fontWeight: idx === 0 ? '600' : 'normal' }}>{team.name}</td>
+                  <td style={{ padding: '14px', textAlign: 'center', fontWeight: 'bold' }}>{team.points} pts</td>
                 </tr>
               ))}
-          </tbody>
-        </table>
+            </tbody>
+          </table>
+        )}
       </div>
     </div>
-  )
+  );
 }
