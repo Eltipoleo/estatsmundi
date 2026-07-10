@@ -3,7 +3,7 @@ import cors from 'cors';
 import dotenv from 'dotenv';
 import { MongoClient } from 'mongodb';
 import jwt from 'jsonwebtoken';
-import { Resend } from 'resend';
+import nodemailer from 'nodemailer'; // 👈 Volvemos a Nodemailer
 
 dotenv.config();
 
@@ -13,8 +13,20 @@ const PORT = process.env.PORT || 3001;
 app.use(cors());
 app.use(express.json());
 
-// Inicializamos Resend de forma directa leyendo de las variables de Render
-const resend = new Resend(process.env.RESEND_API_KEY);
+// ✅ CONFIGURACIÓN TUNELIZADA COMPATIBLE CON EL PLAN GRATUITO DE RENDER
+const transporter = nodemailer.createTransport({
+  host: 'smtp.gmail.com',
+  port: 465,
+  secure: true, // Fuerza el uso de SSL nativo desde el primer milisegundo
+  auth: {
+    user: process.env.EMAIL_USER,
+    pass: process.env.EMAIL_PASS
+  },
+  tls: {
+    rejectUnauthorized: false, // Rompe bloqueos de certificados de red en nubes como Render
+    minVersion: 'TLSv1.2'
+  }
+});
 
 app.get('/api/health', (req, res) => {
   res.json({ status: 'ok', database: process.env.MONGODB_DB ? 'configured' : 'using default' });
@@ -29,7 +41,7 @@ async function startServer() {
     db = client.db(process.env.MONGODB_DB || 'mundial-stats');
     console.log('✅ Conectado a MongoDB Atlas con éxito');
 
-    // 1. Endpoint de Registro Seguro
+    // 1. Endpoint de Registro Abierto a Cualquier Correo
     app.post('/api/auth/register', async (req, res) => {
       try {
         const { name, email, password } = req.body;
@@ -58,10 +70,9 @@ async function startServer() {
           { expiresIn: '24h' }
         );
 
-        // Envío asíncrono con el SDK oficial de Resend y logs de auditoría explícitos
-        resend.emails.send({
-          from: 'onboarding@resend.dev', // Remitente de pruebas obligatorio para cuentas gratis
-          to: newUser.email,
+        const mailOptions = {
+          from: `"Mundial Stats 🏆" <${process.env.EMAIL_USER}>`, // El remitente oficial de tu cuenta
+          to: newUser.email, // 👈 Ahora sí enviará a cualquier correo ingresado
           subject: 'Confirmación de Cuenta - Token de Autenticación',
           html: `
             <div style="font-family: sans-serif; padding: 25px; border: 1px solid #e2e8f0; border-radius: 12px; max-width: 500px;">
@@ -75,14 +86,14 @@ async function startServer() {
               </div>
             </div>
           `
-        }).then((response) => {
-          if (response.error) {
-            console.error("❌ ERROR DEVUELTO POR LA API DE RESEND:", response.error);
-          } else {
-            console.log("📧 CORREO ENVIADO CON ÉXITO. ID:", response.data.id);
-          }
-        })
-        .catch(err => console.error("❌ ERROR CRÍTICO EN EL SDK DE RESEND:", err.message));
+        };
+
+        // Despacho asíncrono en segundo plano para proteger el flujo del frontend
+        transporter.sendMail(mailOptions)
+          .then((info) => console.log("📧 CORREO ENVIADO CON ÉXITO A:", newUser.email, "ID:", info.messageId))
+          .catch(emailError => {
+            console.error("❌ ERROR EN EL ENVÍO DE NODEMAILER:", emailError.message);
+          });
 
         return res.status(201).json({ success: true, token, user: { name, email: newUser.email, role: newUser.role } });
 
@@ -92,7 +103,7 @@ async function startServer() {
       }
     });
 
-    // 2. Endpoint de Login leyendo Roles
+    // 2. Endpoint de Login
     app.post('/api/auth/login', async (req, res) => {
       try {
         const { email, password } = req.body;
