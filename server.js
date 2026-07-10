@@ -3,7 +3,7 @@ import cors from 'cors';
 import dotenv from 'dotenv';
 import { MongoClient } from 'mongodb';
 import jwt from 'jsonwebtoken';
-import nodemailer from 'nodemailer'; // 👈 Volvemos a Nodemailer
+import nodemailer from 'nodemailer';
 
 dotenv.config();
 
@@ -13,17 +13,17 @@ const PORT = process.env.PORT || 3001;
 app.use(cors());
 app.use(express.json());
 
-// ✅ CONFIGURACIÓN TUNELIZADA COMPATIBLE CON EL PLAN GRATUITO DE RENDER
+// ✅ CONFIGURACIÓN PARA GMAIL CON PUERTO 587 (TLS EXPLÍCITO) PARA EVITAR TIMEOUTS EN RENDER
 const transporter = nodemailer.createTransport({
   host: 'smtp.gmail.com',
-  port: 465,
-  secure: true, // Fuerza el uso de SSL nativo desde el primer milisegundo
+  port: 587,
+  secure: false, // false para puerto 587 (usa STARTTLS)
   auth: {
     user: process.env.EMAIL_USER,
     pass: process.env.EMAIL_PASS
   },
   tls: {
-    rejectUnauthorized: false, // Rompe bloqueos de certificados de red en nubes como Render
+    rejectUnauthorized: false, // Evita bloqueos por certificados de red en la nube
     minVersion: 'TLSv1.2'
   }
 });
@@ -41,7 +41,7 @@ async function startServer() {
     db = client.db(process.env.MONGODB_DB || 'mundial-stats');
     console.log('✅ Conectado a MongoDB Atlas con éxito');
 
-    // 1. Endpoint de Registro Abierto a Cualquier Correo
+    // 1. Endpoint de Registro Abierto a Cualquier Correo (Google)
     app.post('/api/auth/register', async (req, res) => {
       try {
         const { name, email, password } = req.body;
@@ -71,8 +71,8 @@ async function startServer() {
         );
 
         const mailOptions = {
-          from: `"Mundial Stats 🏆" <${process.env.EMAIL_USER}>`, // El remitente oficial de tu cuenta
-          to: newUser.email, // 👈 Ahora sí enviará a cualquier correo ingresado
+          from: `"Mundial Stats 🏆" <${process.env.EMAIL_USER}>`,
+          to: newUser.email, // Enviará a cualquier correo ingresado en el formulario
           subject: 'Confirmación de Cuenta - Token de Autenticación',
           html: `
             <div style="font-family: sans-serif; padding: 25px; border: 1px solid #e2e8f0; border-radius: 12px; max-width: 500px;">
@@ -88,11 +88,11 @@ async function startServer() {
           `
         };
 
-        // Despacho asíncrono en segundo plano para proteger el flujo del frontend
+        // Despacho asíncrono en segundo plano para que el frontend no se congele jamás
         transporter.sendMail(mailOptions)
-          .then((info) => console.log("📧 CORREO ENVIADO CON ÉXITO A:", newUser.email, "ID:", info.messageId))
+          .then((info) => console.log("📧 CORREO DE GOOGLE ENVIADO CON ÉXITO A:", newUser.email, "ID:", info.messageId))
           .catch(emailError => {
-            console.error("❌ ERROR EN EL ENVÍO DE NODEMAILER:", emailError.message);
+            console.error("❌ ERROR EN EL ENVÍO DE NODEMAILER (GOOGLE):", emailError.message);
           });
 
         return res.status(201).json({ success: true, token, user: { name, email: newUser.email, role: newUser.role } });
