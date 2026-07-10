@@ -13,18 +13,17 @@ const PORT = process.env.PORT || 3001;
 app.use(cors());
 app.use(express.json());
 
+// 🔒 CONFIGURACIÓN LIMPIA Y DIRECTA PARA GMAIL
 const transporter = nodemailer.createTransport({
-  host: 'smtp.gmail.com',
-  port: 587,
-  secure: false, 
+  service: 'gmail',
   auth: {
-    user: process.env.EMAIL_USER, 
-    pass: process.env.EMAIL_PASS  
-  },
-  tls: {
-    rejectUnauthorized: false, 
-    minVersion: 'TLSv1.2'
+    user: process.env.EMAIL_USER, // Tu correo de gmail
+    pass: process.env.EMAIL_PASS  // Las 16 letras seguidas sin espacios
   }
+});
+
+app.get('/api/health', (req, res) => {
+  res.json({ status: 'ok', database: process.env.MONGODB_DB ? 'configured' : 'using default' });
 });
 
 const client = new MongoClient(process.env.MONGODB_URI || 'mongodb://127.0.0.1:27017');
@@ -66,7 +65,6 @@ async function startServer() {
         const adminEmailSetting = process.env.ADMIN_EMAILS || 'joserty83@gmail.com';
         const role = email.toLowerCase() === adminEmailSetting.toLowerCase() ? 'administrador' : 'usuario';
 
-        // 🛡️ IMPORTANTE: Se guarda inicialmente desactivado (false)
         const newUser = { 
           name, 
           email: email.toLowerCase(), 
@@ -78,14 +76,12 @@ async function startServer() {
         
         await db.collection('users').insertOne(newUser);
 
-        // Generamos un token específico para la activación (expira en 1 hora)
         const activationToken = jwt.sign(
           { email: newUser.email },
           process.env.JWT_SECRET || 'secret_fallback',
           { expiresIn: '1h' }
         );
 
-        // URL que apuntará al backend para procesar la verificación
         const activationUrl = `https://estatsmundi.onrender.com/api/auth/verify?token=${activationToken}`;
 
         const mailOptions = {
@@ -107,10 +103,9 @@ async function startServer() {
         };
 
         transporter.sendMail(mailOptions)
-          .then(() => console.log("📧 ENLACE DE ACTIVACIÓN ENVIADO A:", newUser.email))
-          .catch(err => console.error("❌ Error de envío:", err.message));
+          .then(() => console.log("📧 ENLACE DE ACTIVACIÓN ENVIADO CON ÉXITO A:", newUser.email))
+          .catch(err => console.error("❌ ERROR EN GMAIL:", err.message));
 
-        // Le avisamos al frontend que revise su buzón de entrada
         return res.status(201).json({ success: true, message: 'Registro previo completado. Por favor, revisa tu correo electrónico para activar la cuenta.' });
 
       } catch (err) {
@@ -131,7 +126,6 @@ async function startServer() {
       try {
         const decoded = jwt.verify(token, process.env.JWT_SECRET || 'secret_fallback');
         
-        // Buscamos al usuario y cambiamos su estado a true
         const result = await db.collection('users').updateOne(
           { email: decoded.email.toLowerCase() },
           { $set: { emailVerified: true } }
@@ -141,11 +135,10 @@ async function startServer() {
           return res.status(404).send('<h1>Error: El usuario no existe</h1>');
         }
 
-        // Redirección directa al login del frontend informando el éxito
         return res.redirect('https://estatsmundi.vercel.app/login?activated=true');
 
       } catch (err) {
-        return res.status(400).send('<h1>El enlace de activación es inválido o ha expirado. Por favor regístrate de nuevo.</h1>');
+        return res.status(400).send('<h1>El enlace de activación es inválido o ha expirado.</h1>');
       }
     });
 
@@ -159,13 +152,12 @@ async function startServer() {
           return res.status(400).json({ error: 'Credenciales incorrectas' });
         }
 
-        // 🛡️ Bloqueo preventivo en login si no se ha verificado el correo
         if (user.emailVerified === false) {
           return res.status(401).json({ error: 'Tu cuenta no ha sido activada. Por favor, revisa tu correo electrónico.', emailVerified: false });
         }
 
         const token = jwt.sign({ id: user._id, email: user.email, role: user.role }, process.env.JWT_SECRET || 'secret_fallback', { expiresIn: '24h' });
-        return res.json({ success: true, token, user: { name: user.name, email: user.email, role: user.role, emailVerified: user.emailVerified } });
+        return res.json({ success: true, token, user: { name: user.name, email: user.email, role: user.role } });
       } catch (err) { return res.status(500).json({ error: 'Error interno' }); }
     });
 
