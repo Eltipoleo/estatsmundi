@@ -56,7 +56,7 @@ export default function Register() {
               className="w-full rounded-lg border bg-background px-3 py-2 outline-none focus:border-primary"
               required
             />
-            <p className="mt-1 text-xs text-muted-foreground">Usa email que empiece con "admin" para rol administrador.</p>
+            <p className="mt-1 text-xs text-muted-foreground">Usa tu correo electrónico principal para crear tu perfil de usuario.</p>
           </div>
           <div>
             <label className="mb-1 block text-sm font-medium">Contraseña</label>

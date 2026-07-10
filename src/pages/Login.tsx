@@ -45,7 +45,7 @@ export default function Login() {
               className="w-full rounded-lg border bg-background px-3 py-2 outline-none focus:border-primary"
               required
             />
-            <p className="mt-1 text-xs text-muted-foreground">Tip: Debes estar registrado. Para admin, usa correo que empiece con "admin".</p>
+            <p className="mt-1 text-xs text-muted-foreground">Tip: Ingrese su correo registrado para validar su acceso a la plataforma.</p>
           </div>
           <div>
             <label className="mb-1 block text-sm font-medium">Contraseña</label>
