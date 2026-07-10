@@ -13,13 +13,17 @@ const PORT = process.env.PORT || 3001;
 app.use(cors());
 app.use(express.json());
 
-// Transporter nativo de Gmail
+// 🔒 CONFIGURACIÓN CORREGIDA SIN PARÁMETROS DUPLICADOS PARA GMAIL NATIVO
 const transporter = nodemailer.createTransport({
   service: 'gmail',
   auth: {
-    user: process.env.EMAIL_USER,
-    pass: process.env.EMAIL_PASS
+    user: process.env.EMAIL_USER, // joserty83@gmail.com
+    pass: process.env.EMAIL_PASS  // Las 16 letras consecutivas sin espacios
   }
+});
+
+app.get('/api/health', (req, res) => {
+  res.json({ status: 'ok', database: process.env.MONGODB_DB ? 'configured' : 'using default' });
 });
 
 const client = new MongoClient(process.env.MONGODB_URI || 'mongodb://127.0.0.1:27017');
