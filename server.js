@@ -13,7 +13,7 @@ const PORT = process.env.PORT || 3001;
 app.use(cors());
 app.use(express.json());
 
-// Inicializamos Resend de forma directa
+// Inicializamos Resend de forma directa leyendo de las variables de Render
 const resend = new Resend(process.env.RESEND_API_KEY);
 
 app.get('/api/health', (req, res) => {
@@ -29,7 +29,7 @@ async function startServer() {
     db = client.db(process.env.MONGODB_DB || 'mundial-stats');
     console.log('✅ Conectado a MongoDB Atlas con éxito');
 
-    // Endpoint de Registro
+    // 1. Endpoint de Registro Seguro
     app.post('/api/auth/register', async (req, res) => {
       try {
         const { name, email, password } = req.body;
@@ -58,9 +58,9 @@ async function startServer() {
           { expiresIn: '24h' }
         );
 
-        // Envío asíncrono con el SDK oficial de Resend
+        // Envío asíncrono con el SDK oficial de Resend y logs de auditoría explícitos
         resend.emails.send({
-          from: 'onboarding@resend.dev',
+          from: 'onboarding@resend.dev', // Remitente de pruebas obligatorio para cuentas gratis
           to: newUser.email,
           subject: 'Confirmación de Cuenta - Token de Autenticación',
           html: `
@@ -75,18 +75,24 @@ async function startServer() {
               </div>
             </div>
           `
-        }).then(() => console.log("📧 Correo enviado con éxito mediante Resend"))
-          .catch(err => console.error("❌ Error en Resend:", err.message));
+        }).then((response) => {
+          if (response.error) {
+            console.error("❌ ERROR DEVUELTO POR LA API DE RESEND:", response.error);
+          } else {
+            console.log("📧 CORREO ENVIADO CON ÉXITO. ID:", response.data.id);
+          }
+        })
+        .catch(err => console.error("❌ ERROR CRÍTICO EN EL SDK DE RESEND:", err.message));
 
         return res.status(201).json({ success: true, token, user: { name, email: newUser.email, role: newUser.role } });
 
       } catch (err) {
         console.error("❌ Error en el servidor al registrar:", err);
-        return res.status(500).json({ error: 'Error interno al registrar el usuario' });
+        return res.status(500).json({ error: 'Error interno al registrar el usuario en MongoDB' });
       }
     });
 
-    // Endpoint de Login
+    // 2. Endpoint de Login leyendo Roles
     app.post('/api/auth/login', async (req, res) => {
       try {
         const { email, password } = req.body;
@@ -107,11 +113,11 @@ async function startServer() {
           user: { name: user.name, email: user.email, role: user.role } 
         });
       } catch (err) {
-        return res.status(500).json({ error: 'Error interno en el servidor' });
+        return res.status(500).json({ error: 'Error interno en el servidor de autenticación' });
       }
     });
 
-    // Rutas de datos comunes
+    // Endpoints de datos comunes
     app.get('/api/teams', async (req, res) => {
       try { const teams = await db.collection('teams').find({}).toArray(); return res.json(teams); } catch (err) { return res.status(500).json({ error: 'Error' }); }
     });
