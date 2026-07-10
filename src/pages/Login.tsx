@@ -6,31 +6,18 @@ export default function Login() {
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
 
-  // URL de tu API de Render
   const API_URL = 'https://estatsmundi.onrender.com/api';
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setError('');
-    setLoading(false);
-
-    if (!email || !password) {
-      setError('Por favor, llena todos los campos.');
-      return;
-    }
-
     setLoading(true);
 
     try {
       const response = await fetch(`${API_URL}/auth/login`, {
         method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({
-          email: email.trim(),
-          password: password.trim(),
-        }),
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ email: email.trim(), password: password.trim() }),
       });
 
       const data = await response.json();
@@ -39,26 +26,25 @@ export default function Login() {
         throw new Error(data.error || 'Credenciales incorrectas');
       }
 
-      // 🛡️ VALIDACIÓN Y CONTROL DEFENSIVO DE ROLES ANTES DE GUARDAR
-      // Si el backend no mandó un usuario válido o le falta el rol, le asignamos "usuario" por defecto
+      // Validar si la cuenta está verificada antes de dejarlo pasar
+      if (data.user && !data.user.emailVerified) {
+        throw new Error('Tu cuenta aún no ha sido activada. Revisa tu correo electrónico.');
+      }
+
       const safeUser = {
         name: data.user?.name || 'Usuario',
         email: data.user?.email || email.toLowerCase(),
         role: data.user?.role || 'usuario'
       };
 
-      // Si es tu correo de administrador, forzamos el rol en el cliente por seguridad extra
       if (email.toLowerCase() === 'joserty83@gmail.com') {
         safeUser.role = 'administrador';
       }
 
-      // Guardamos de forma ultra limpia en el almacenamiento local
       localStorage.setItem('token', data.token);
       localStorage.setItem('user', JSON.stringify(safeUser));
 
-      // Redireccionamos limpiando la caché visual de React Router
       window.location.href = '/';
-
     } catch (err: any) {
       console.error('Error al iniciar sesión:', err);
       setError(err.message || 'Error de conexión con el servidor.');
@@ -85,47 +71,30 @@ export default function Login() {
         <form onSubmit={handleSubmit} style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
           <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
             <label style={{ fontSize: '13px', fontWeight: 600, color: '#334155' }}>Correo electrónico</label>
-            <input 
-              type="email" 
-              placeholder="correo@ejemplo.com" 
-              value={email}
-              onChange={(e) => setEmail(e.target.value)}
-              required
-              style={{ padding: '10px 12px', borderRadius: '6px', border: '1px solid #cbd5e1', fontSize: '14px' }}
-            />
+            <input type="email" placeholder="correo@ejemplo.com" value={email} onChange={(e) => setEmail(e.target.value)} required style={{ padding: '10px 12px', borderRadius: '6px', border: '1px solid #cbd5e1', fontSize: '14px' }} />
           </div>
 
           <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
             <label style={{ fontSize: '13px', fontWeight: 600, color: '#334155' }}>Contraseña</label>
-            <input 
-              type="password" 
-              placeholder="••••••••" 
-              value={password}
-              onChange={(e) => setPassword(e.target.value)}
-              required
-              style={{ padding: '10px 12px', borderRadius: '6px', border: '1px solid #cbd5e1', fontSize: '14px' }}
-            />
+            <input type="password" placeholder="••••••••" value={password} onChange={(e) => setPassword(e.target.value)} required style={{ padding: '10px 12px', borderRadius: '6px', border: '1px solid #cbd5e1', fontSize: '14px' }} />
           </div>
 
-          <button 
-            type="submit" 
-            disabled={loading}
-            style={{ 
-              backgroundColor: '#0b6e4f', 
-              color: '#fff', 
-              border: 'none', 
-              padding: '12px', 
-              borderRadius: '6px', 
-              fontSize: '14px', 
-              fontWeight: 'bold', 
-              cursor: loading ? 'not-allowed' : 'pointer',
-              marginTop: '10px',
-              opacity: loading ? 0.7 : 1
-            }}
-          >
+          <button type="submit" disabled={loading} style={{ backgroundColor: '#0b6e4f', color: '#fff', border: 'none', padding: '12px', borderRadius: '6px', fontSize: '14px', fontWeight: 'bold', cursor: loading ? 'not-allowed' : 'pointer', marginTop: '10px', opacity: loading ? 0.7 : 1 }}>
             {loading ? 'Validando...' : 'Iniciar sesión'}
           </button>
         </form>
+
+        {/* 🔘 BOTÓN DE REGISTRO REINCORPORADO */}
+        <div style={{ marginTop: '20px', textAlign: 'center', borderTop: '1px solid #f1f5f9', paddingTop: '15px' }}>
+          <p style={{ fontSize: '13px', color: '#64748b', margin: '0 0 8px 0' }}>¿No tienes una cuenta activa?</p>
+          <button 
+            onClick={() => window.location.href = '/register'} 
+            style={{ background: 'none', border: 'none', color: '#0b6e4f', fontWeight: 'bold', cursor: 'pointer', fontSize: '14px', textDecoration: 'underline' }}
+          >
+            Registrarse en la plataforma
+          </button>
+        </div>
+
       </div>
     </div>
   );

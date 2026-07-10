@@ -13,7 +13,6 @@ const PORT = process.env.PORT || 3001;
 app.use(cors());
 app.use(express.json());
 
-// ✅ CONFIGURACIÓN DE NODEMAILER (PUERTO 587 STARTTLS)
 const transporter = nodemailer.createTransport({
   host: 'smtp.gmail.com',
   port: 587,
@@ -28,10 +27,6 @@ const transporter = nodemailer.createTransport({
   }
 });
 
-app.get('/api/health', (req, res) => {
-  res.json({ status: 'ok', database: process.env.MONGODB_DB ? 'configured' : 'using default' });
-});
-
 const client = new MongoClient(process.env.MONGODB_URI || 'mongodb://127.0.0.1:27017');
 let db;
 
@@ -41,11 +36,9 @@ async function startServer() {
     db = client.db(process.env.MONGODB_DB || 'mundial-stats');
     console.log('✅ Conectado a MongoDB Atlas con éxito');
 
-    // Middleman de seguridad para administradores
     const isAdmin = (req, res, next) => {
       const authHeader = req.headers.authorization;
       if (!authHeader) return res.status(401).json({ error: 'Falta token de autenticación' });
-
       const token = authHeader.split(' ')[1];
       try {
         const decoded = jwt.verify(token, process.env.JWT_SECRET || 'secret_fallback');
@@ -53,16 +46,14 @@ async function startServer() {
           req.user = decoded;
           next();
         } else {
-          return res.status(403).json({ error: 'Acceso denegado, requiere rol administrador' });
+          return res.status(403).json({ error: 'Acceso denegado' });
         }
-      } catch (err) {
-        return res.status(401).json({ error: 'Token inválido o expirado' });
-      }
+      } catch (err) { return res.status(401).json({ error: 'Token inválido' }); }
     };
 
-    // ==========================================
-    // 🔑 ENDPOINT DE REGISTRO CON ENVÍO DE TOKEN
-    // ==========================================
+    // =================================================
+    // 🔑 ENDPOINT DE REGISTRO (MANDA LINK DE ACTIVACIÓN)
+    // =================================================
     app.post('/api/auth/register', async (req, res) => {
       try {
         const { name, email, password } = req.body;
@@ -72,59 +63,89 @@ async function startServer() {
           return res.status(400).json({ error: 'El correo ya está registrado' });
         }
 
-        // 🛠️ CORRECCIÓN: Lee dinámicamente de tu variable ADMIN_EMAILS de Render
         const adminEmailSetting = process.env.ADMIN_EMAILS || 'joserty83@gmail.com';
         const role = email.toLowerCase() === adminEmailSetting.toLowerCase() ? 'administrador' : 'usuario';
 
+        // 🛡️ IMPORTANTE: Se guarda inicialmente desactivado (false)
         const newUser = { 
           name, 
           email: email.toLowerCase(), 
           password, 
           role, 
-          emailVerified: true, 
+          emailVerified: false, 
           createdAt: new Date() 
         };
         
-        const result = await db.collection('users').insertOne(newUser);
+        await db.collection('users').insertOne(newUser);
 
-        // Generamos el Token JWT firmado para la sesión
-        const token = jwt.sign(
-          { id: result.insertedId, email: newUser.email, role: newUser.role },
+        // Generamos un token específico para la activación (expira en 1 hora)
+        const activationToken = jwt.sign(
+          { email: newUser.email },
           process.env.JWT_SECRET || 'secret_fallback',
-          { expiresIn: '24h' }
+          { expiresIn: '1h' }
         );
 
-        // Armamos el cuerpo del correo de Google
+        // URL que apuntará al backend para procesar la verificación
+        const activationUrl = `https://estatsmundi.onrender.com/api/auth/verify?token=${activationToken}`;
+
         const mailOptions = {
           from: `"Mundial Stats 🏆" <${process.env.EMAIL_USER}>`,
           to: newUser.email, 
-          subject: 'Confirmación de Cuenta - Token de Autenticación',
+          subject: 'Activa tu cuenta - Mundial Stats',
           html: `
-            <div style="font-family: sans-serif; padding: 25px; border: 1px solid #e2e8f0; border-radius: 12px; max-width: 500px; margin: 0 auto; background-color: #ffffff;">
+            <div style="font-family: sans-serif; padding: 30px; border: 1px solid #e2e8f0; border-radius: 12px; max-width: 480px; margin: 0 auto; background-color: #ffffff; text-align: center;">
               <h2 style="color: #0b6e4f; margin-top: 0;">¡Hola, ${name}!</h2>
-              <p style="color: #334155;">Tu cuenta ha sido creada con éxito en la plataforma del Mundial.</p>
-              <p style="color: #334155;">Tu perfil se ha asignado con el rol de: <strong style="text-transform: uppercase; color: #0b6e4f;">${role}</strong>.</p>
-              <hr style="border: 0; border-top: 1px solid #e2e8f0; margin: 20px 0;" />
-              <p style="color: #334155;">Este es tu <strong>Token de Autenticación JWT</strong> seguro para iniciar sesión:</p>
-              <div style="background: #f8fafc; border: 1px solid #cbd5e1; padding: 12px; word-break: break-all; font-family: monospace; border-radius: 6px; font-size: 11px; color: #0f172a; font-weight: bold; line-height: 1.4;">
-                ${token}
+              <p style="color: #475569; font-size: 15px;">Gracias por registrarte. Para poder iniciar sesión en la plataforma de estadísticas, es necesario que confirmes tu identidad.</p>
+              <div style="margin: 25px 0;">
+                <a href="${activationUrl}" target="_blank" style="background-color: #0b6e4f; color: #ffffff; padding: 12px 24px; font-weight: bold; font-size: 14px; text-decoration: none; border-radius: 6px; display: inline-block;">
+                  Activar Mi Cuenta Aquí
+                </a>
               </div>
+              <p style="color: #94a3b8; font-size: 11px;">Este enlace de seguridad expirará en 1 hora.</p>
             </div>
           `
         };
 
-        // Despacho asíncrono en segundo plano
         transporter.sendMail(mailOptions)
-          .then((info) => console.log("📧 CORREO DE GOOGLE ENVIADO CON ÉXITO A:", newUser.email, "ID:", info.messageId))
-          .catch(emailError => {
-            console.error("❌ ERROR EN EL ENVÍO DE NODEMAILER (GOOGLE):", emailError.message);
-          });
+          .then(() => console.log("📧 ENLACE DE ACTIVACIÓN ENVIADO A:", newUser.email))
+          .catch(err => console.error("❌ Error de envío:", err.message));
 
-        return res.status(201).json({ success: true, token, user: { name, email: newUser.email, role: newUser.role } });
+        // Le avisamos al frontend que revise su buzón de entrada
+        return res.status(201).json({ success: true, message: 'Registro previo completado. Por favor, revisa tu correo electrónico para activar la cuenta.' });
 
       } catch (err) {
-        console.error("❌ Error general en el servidor al registrar:", err);
-        return res.status(500).json({ error: 'Error interno en el servidor de base de datos' });
+        return res.status(500).json({ error: 'Error interno en el servidor' });
+      }
+    });
+
+    // ==========================================
+    // 🔗 ENDPOINT DE PROCESAMIENTO DEL CLIC (GET)
+    // ==========================================
+    app.get('/api/auth/verify', async (req, res) => {
+      const { token } = req.query;
+      
+      if (!token) {
+        return res.status(400).send('<h1>Error: Falta el token de activación</h1>');
+      }
+
+      try {
+        const decoded = jwt.verify(token, process.env.JWT_SECRET || 'secret_fallback');
+        
+        // Buscamos al usuario y cambiamos su estado a true
+        const result = await db.collection('users').updateOne(
+          { email: decoded.email.toLowerCase() },
+          { $set: { emailVerified: true } }
+        );
+
+        if (result.matchedCount === 0) {
+          return res.status(404).send('<h1>Error: El usuario no existe</h1>');
+        }
+
+        // Redirección directa al login del frontend informando el éxito
+        return res.redirect('https://estatsmundi.vercel.app/login?activated=true');
+
+      } catch (err) {
+        return res.status(400).send('<h1>El enlace de activación es inválido o ha expirado. Por favor regístrate de nuevo.</h1>');
       }
     });
 
@@ -133,27 +154,28 @@ async function startServer() {
       try {
         const { email, password } = req.body;
         const user = await db.collection('users').findOne({ email: email.toLowerCase() });
+        
         if (!user || user.password !== password) {
           return res.status(400).json({ error: 'Credenciales incorrectas' });
         }
 
+        // 🛡️ Bloqueo preventivo en login si no se ha verificado el correo
+        if (user.emailVerified === false) {
+          return res.status(401).json({ error: 'Tu cuenta no ha sido activada. Por favor, revisa tu correo electrónico.', emailVerified: false });
+        }
+
         const token = jwt.sign({ id: user._id, email: user.email, role: user.role }, process.env.JWT_SECRET || 'secret_fallback', { expiresIn: '24h' });
-        return res.json({ success: true, token, user: { name: user.name, email: user.email, role: user.role } });
-      } catch (err) {
-        return res.status(500).json({ error: 'Error interno en la autenticación' });
-      }
+        return res.json({ success: true, token, user: { name: user.name, email: user.email, role: user.role, emailVerified: user.emailVerified } });
+      } catch (err) { return res.status(500).json({ error: 'Error interno' }); }
     });
 
-    // ==========================================
-    // 📊 RUTAS PÚBLICAS Y DE ADMINISTRACIÓN
-    // ==========================================
+    // --- MANTENIMIENTO DE RUTAS PÚBLICAS Y DE ADMIN ---
     app.get('/api/teams', async (req, res) => {
       try { const data = await db.collection('teams').find({}).toArray(); return res.json(data); } catch (e) { return res.status(500).json({ error: 'Error' }); }
     });
     app.get('/api/players', async (req, res) => {
       try { const data = await db.collection('players').find({}).toArray(); return res.json(data); } catch (e) { return res.status(500).json({ error: 'Error' }); }
     });
-
     app.post('/api/admin/teams', isAdmin, async (req, res) => {
       try {
         const { name, points } = req.body;
@@ -161,7 +183,6 @@ async function startServer() {
         return res.status(201).json({ success: true });
       } catch (err) { return res.status(500).json({ error: 'Error' }); }
     });
-
     app.post('/api/admin/players', isAdmin, async (req, res) => {
       try {
         const { name, team, goals } = req.body;
@@ -170,14 +191,8 @@ async function startServer() {
       } catch (err) { return res.status(500).json({ error: 'Error' }); }
     });
 
-    app.listen(PORT, () => {
-      console.log(`🚀 Servidor backend corriendo en el puerto ${PORT}`);
-    });
-
-  } catch (error) {
-    console.error('❌ Error crítico de arranque:', error);
-    process.exit(1);
-  }
+    app.listen(PORT, () => console.log(`🚀 Servidor backend corriendo en el puerto ${PORT}`));
+  } catch (error) { process.exit(1); }
 }
 
 startServer();
