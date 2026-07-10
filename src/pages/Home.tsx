@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react"
 import { Link } from "react-router-dom"
-import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, PieChart, Pie, Cell, Legend } from "recharts"
+import { BarChart, Bar, XAxis, YAxis, Tooltip, PieChart, Pie, Cell, Legend } from "recharts"
 import { Trophy, Users, Goal, TrendingUp } from "lucide-react"
 import { Card, CardHeader, StatBadge } from "../components/Card"
 import { apiFetch } from "../lib/api"
@@ -41,7 +41,7 @@ export default function Home() {
     void loadHomeData()
   }, [])
 
-  // FILTRO SEGURO: Evita errores si un jugador en la BD viene sin nombre o corrupto
+  // FILTRO SEGURO: Evita errores si un jugador en la BD viene corrupto o sin nombre
   const topScorers = [...playerData]
     .filter((p) => p && typeof p.name === "string")
     .sort((a, b) => b.goals - a.goals)
@@ -92,34 +92,30 @@ export default function Home() {
       <section className="grid gap-6 lg:grid-cols-2">
         <Card>
           <CardHeader title="Goleadores" subtitle="Top 5 máximos anotadores" icon={<Goal size={18} />} />
-          {/* Contenedor con altura mínima forzada para evitar el error de ResponsiveContainer */}
-          <div className="h-72 p-4" style={{ minHeight: "300px", width: "100%" }}>
-            <ResponsiveContainer width="100%" height="100%">
-              <BarChart data={goalsData}>
-                <XAxis dataKey="name" tick={{ fontSize: 12 }} />
-                <YAxis allowDecimals={false} tick={{ fontSize: 12 }} />
-                <Tooltip />
-                <Bar dataKey="goles" fill="#0b6e4f" radius={[6, 6, 0, 0]} />
-              </BarChart>
-            </ResponsiveContainer>
+          {/* Contenedor con ancho fijo interno para centrar el gráfico de barras */}
+          <div className="w-full h-64 p-4 flex justify-center items-center overflow-hidden">
+            <BarChart width={450} height={240} data={goalsData}>
+              <XAxis dataKey="name" tick={{ fontSize: 12 }} />
+              <YAxis allowDecimals={false} tick={{ fontSize: 12 }} />
+              <Tooltip />
+              <Bar dataKey="goles" fill="#0b6e4f" radius={[6, 6, 0, 0]} />
+            </BarChart>
           </div>
         </Card>
 
         <Card>
           <CardHeader title="Puntos por equipo" subtitle="Líderes del torneo" icon={<TrendingUp size={18} />} />
-          {/* Contenedor con altura mínima forzada */}
-          <div className="h-72 p-4" style={{ minHeight: "300px", width: "100%" }}>
-            <ResponsiveContainer width="100%" height="100%">
-              <PieChart>
-                <Pie data={pointsData} dataKey="value" nameKey="name" cx="50%" cy="50%" outerRadius={90} label>
-                  {pointsData.map((_, i) => (
-                    <Cell key={i} fill={COLORS[i % COLORS.length]} />
-                  ))}
-                </Pie>
-                <Legend />
-                <Tooltip />
-              </PieChart>
-            </ResponsiveContainer>
+          {/* Contenedor estable para el gráfico de Pay */}
+          <div className="w-full h-64 p-4 flex justify-center items-center overflow-hidden">
+            <PieChart width={450} height={240}>
+              <Pie data={pointsData} dataKey="value" nameKey="name" cx="50%" cy="45%" outerRadius={75} label>
+                {pointsData.map((_, i) => (
+                  <Cell key={i} fill={COLORS[i % COLORS.length]} />
+                ))}
+              </Pie>
+              <Legend verticalAlign="bottom" height={36} />
+              <Tooltip />
+            </PieChart>
           </div>
         </Card>
       </section>
