@@ -3,6 +3,7 @@ import cors from 'cors';
 import dotenv from 'dotenv';
 import { MongoClient } from 'mongodb';
 import jwt from 'jsonwebtoken';
+import { Resend } from 'resend'; // 👈 Importamos la librería oficial
 
 dotenv.config();
 
@@ -11,6 +12,9 @@ const PORT = process.env.PORT || 3001;
 
 app.use(cors());
 app.use(express.json());
+
+// ✅ INICIALIZAMOS RESEND CON TU VARIABLE DE ENTORNO DE RENDER
+const resend = new Resend(process.env.RESEND_API_KEY);
 
 app.get('/api/health', (req, res) => {
   res.json({ status: 'ok', database: process.env.MONGODB_DB ? 'configured' : 'using default' });
@@ -25,7 +29,7 @@ async function startServer() {
     db = client.db(process.env.MONGODB_DB || 'mundial-stats');
     console.log('✅ Conectado a MongoDB Atlas con éxito');
 
-    // 1. Registro seguro (Despachando correo por HTTP vía Resend desde Render)
+    // 1. Endpoint de Registro
     app.post('/api/auth/register', async (req, res) => {
       try {
         const { name, email, password } = req.body;
@@ -54,32 +58,25 @@ async function startServer() {
           { expiresIn: '24h' }
         );
 
-        // 🔥 ENVÍO POR API HTTP: Render deja pasar esto al 100% sin bloquear puertos
-        fetch('https://api.resend.com/emails', {
-          method: 'POST',
-          headers: {
-            'Authorization': `Bearer ${process.env.RESEND_API_KEY}`,
-            'Content-Type': 'application/json'
-          },
-          body: JSON.stringify({
-            from: 'Mundial Stats <onboarding@resend.dev>', // Remitente gratuito de pruebas de Resend
-            to: newUser.email,
-            subject: 'Confirmación de Cuenta - Token de Autenticación',
-            html: `
-              <div style="font-family: sans-serif; padding: 25px; border: 1px solid #e2e8f0; border-radius: 12px; max-width: 500px;">
-                <h2 style="color: #0b6e4f; margin-top: 0;">¡Hola, ${name}!</h2>
-                <p>Tu cuenta ha sido creada con éxito en la plataforma del Mundial.</p>
-                <p>Tu perfil se ha asignado con el rol de: <strong style="text-transform: uppercase; color: #0b6e4f;">${role}</strong>.</p>
-                <hr style="border: 0; border-top: 1px solid #e2e8f0; margin: 20px 0;" />
-                <p>Este es tu <strong>Token de Autenticación JWT</strong> seguro para iniciar tus sesiones:</p>
-                <div style="background: #f8fafc; border: 1px solid #cbd5e1; padding: 12px; word-break: break-all; font-family: monospace; border-radius: 6px; font-size: 11px; color: #334155;">
-                  ${token}
-                </div>
+        // 🔥 ENVÍO SEGURO MEDIANTE LA LIBRERÍA OFICIAL (Usa HTTP interno, Render no lo bloquea)
+        resend.emails.send({
+          from: 'Mundial Stats <onboarding@resend.dev>', // Remitente de pruebas gratuito
+          to: newUser.email,
+          subject: 'Confirmación de Cuenta - Token de Autenticación',
+          html: `
+            <div style="font-family: sans-serif; padding: 25px; border: 1px solid #e2e8f0; border-radius: 12px; max-width: 500px;">
+              <h2 style="color: #0b6e4f; margin-top: 0;">¡Hola, ${name}!</h2>
+              <p>Tu cuenta ha sido creada con éxito en la plataforma del Mundial.</p>
+              <p>Tu perfil se ha asignado con el rol de: <strong style="text-transform: uppercase; color: #0b6e4f;">${role}</strong>.</p>
+              <hr style="border: 0; border-top: 1px solid #e2e8f0; margin: 20px 0;" />
+              <p>Este es tu <strong>Token de Autenticación JWT</strong> seguro para iniciar tus sesiones:</p>
+              <div style="background: #f8fafc; border: 1px solid #cbd5e1; padding: 12px; word-break: break-all; font-family: monospace; border-radius: 6px; font-size: 11px; color: #334155;">
+                ${token}
               </div>
-            `
-          })
-        }).then(() => console.log("📧 Correo enviado con éxito desde Render usando Resend"))
-          .catch(err => console.error("❌ Error al enviar por Resend:", err.message));
+            </div>
+          `
+        }).then(() => console.log("📧 Correo despachado con éxito mediante Resend SDK"))
+          .catch(err => console.error("❌ Error en SDK de Resend:", err.message));
 
         return res.status(201).json({ success: true, token, user: { name, email: newUser.email, role: newUser.role } });
 
@@ -89,7 +86,7 @@ async function startServer() {
       }
     });
 
-    // 2. Inicio de Sesión
+    // 2. Endpoint de Login
     app.post('/api/auth/login', async (req, res) => {
       try {
         const { email, password } = req.body;
@@ -114,6 +111,7 @@ async function startServer() {
       }
     });
 
+    // Endpoints de datos
     app.get('/api/teams', async (req, res) => {
       try { const teams = await db.collection('teams').find({}).toArray(); return res.json(teams); } catch (err) { return res.status(500).json({ error: 'Error' }); }
     });
