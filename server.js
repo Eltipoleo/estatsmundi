@@ -60,7 +60,7 @@ async function startServer() {
 
         // Envío asíncrono con el SDK oficial de Resend
         resend.emails.send({
-          from: 'Mundial Stats <onboarding@resend.dev>',
+          from: 'onboarding@resend.dev',
           to: newUser.email,
           subject: 'Confirmación de Cuenta - Token de Autenticación',
           html: `
