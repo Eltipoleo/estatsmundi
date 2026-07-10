@@ -1,98 +1,70 @@
 import { useEffect, useState } from "react"
-import type { Team } from "../data/mundial"
+import { apiFetch } from "../lib/api"
+import { teams as fallbackTeams, type Team } from "../data/mundial"
 
 export default function Teams() {
-  const [query, setQuery] = useState("")
-  const [teams, setTeams] = useState<Team[]>([])
+  const [teams, setTeams] = useState<Team[]>(fallbackTeams)
   const [loading, setLoading] = useState(true)
-  const [error, setError] = useState("")
 
   useEffect(() => {
-    const loadTeams = async () => {
+    async function loadTeams() {
       try {
-        const response = await fetch("http://localhost:3001/api/teams")
-        if (!response.ok) throw new Error("No se pudo cargar el listado de equipos")
-        const data = (await response.json()) as Team[]
-        setTeams(data)
+        const data = await apiFetch<Team[]>("/api/teams")
+        if (Array.isArray(data) && data.length > 0) {
+          setTeams(data)
+        }
       } catch (err) {
-        setError(err instanceof Error ? err.message : "Error desconocido")
+        console.error("Error al cargar equipos de MongoDB:", err)
       } finally {
         setLoading(false)
       }
     }
-
     void loadTeams()
   }, [])
 
-  const sorted = [...teams].sort((a, b) => b.points - a.points)
-  const filtered = sorted.filter((t) => t.name.toLowerCase().includes(query.toLowerCase()))
+  if (loading) {
+    return <div className="p-6 text-sm text-muted-foreground">Cargando equipos...</div>
+  }
 
   return (
     <div className="flex flex-col gap-4">
-      <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
-        <div>
-          <h1 className="text-2xl font-bold">Estadísticas de equipos</h1>
-          <p className="text-sm text-muted-foreground">Tabla de posiciones del torneo.</p>
-        </div>
-        <input
-          value={query}
-          onChange={(e) => setQuery(e.target.value)}
-          placeholder="Buscar equipo..."
-          className="rounded-lg border bg-background px-3 py-2 text-sm outline-none focus:border-primary"
-        />
+      <div>
+        <h1 className="text-2xl font-bold">Equipos participantes</h1>
+        <p className="text-sm text-muted-foreground">Tabla de posiciones y rendimiento en tiempo real.</p>
       </div>
 
-      {loading ? (
-        <div className="rounded-lg border border-muted bg-muted/50 p-8 text-center text-muted-foreground">
-          Cargando datos desde la API propia...
-        </div>
-      ) : error ? (
-        <div className="rounded-lg border border-destructive/30 bg-destructive/10 p-4 text-sm text-destructive">
-          {error}
-        </div>
-      ) : filtered.length === 0 ? (
-        <div className="rounded-lg border border-muted bg-muted/50 p-8 text-center text-muted-foreground">
-          No se encontraron equipos.
-        </div>
-      ) : (
       <div className="overflow-x-auto rounded-xl border bg-card">
-        <table className="w-full text-sm">
-          <thead className="border-b bg-muted text-left text-muted-foreground">
+        <table className="w-full text-left text-sm">
+          <thead className="border-b bg-muted/50 text-xs font-medium uppercase text-muted-foreground">
             <tr>
-              <th className="p-3">#</th>
-              <th className="p-3">Equipo</th>
-              <th className="p-3 text-center">Grupo</th>
-              <th className="p-3 text-center">PJ</th>
-              <th className="p-3 text-center">G</th>
-              <th className="p-3 text-center">E</th>
-              <th className="p-3 text-center">P</th>
-              <th className="p-3 text-center">GF</th>
-              <th className="p-3 text-center">GC</th>
-              <th className="p-3 text-center font-semibold">Pts</th>
+              <th className="px-4 py-3">Selección</th>
+              <th className="px-4 py-3 text-center">PJ</th>
+              <th className="px-4 py-3 text-center">G</th>
+              <th className="px-4 py-3 text-center">E</th>
+              <th className="px-4 py-3 text-center">P</th>
+              <th className="px-4 py-3 text-center">GF</th>
+              <th className="px-4 py-3 text-center">GC</th>
+              <th className="px-4 py-3 text-center font-bold text-primary">PTS</th>
             </tr>
           </thead>
-          <tbody>
-            {filtered.map((t, i) => (
-              <tr key={t.id} className="border-b last:border-0 hover:bg-muted/50">
-                <td className="p-3 text-muted-foreground">{i + 1}</td>
-                <td className="p-3 font-medium">
-                  <span className="mr-2">{t.flag}</span>
-                  {t.name}
-                </td>
-                <td className="p-3 text-center">{t.group}</td>
-                <td className="p-3 text-center">{t.played}</td>
-                <td className="p-3 text-center">{t.won}</td>
-                <td className="p-3 text-center">{t.drawn}</td>
-                <td className="p-3 text-center">{t.lost}</td>
-                <td className="p-3 text-center">{t.goalsFor}</td>
-                <td className="p-3 text-center">{t.goalsAgainst}</td>
-                <td className="p-3 text-center font-bold text-primary">{t.points}</td>
-              </tr>
-            ))}
+          <tbody className="divide-y">
+            {teams
+              .sort((a, b) => b.points - a.points || b.goalsFor - b.goalsAgainst - (a.goalsFor - a.goalsAgainst))
+              .map((team) => (
+                <tr key={team.id} className="hover:bg-muted/30 transition-colors">
+                  <td className="px-4 py-3 font-medium">{team.name}</td>
+                  <td className="px-4 py-3 text-center">{team.played}</td>
+                  <td className="px-4 py-3 text-center">{team.won}</td>
+                  <td className="px-4 py-3 text-center">{team.drawn}</td>
+                  <td className="px-4 py-3 text-center">{team.lost}</td>
+                  <td className="px-4 py-3 text-center">{team.goalsFor}</td>
+                  <td className="px-4 py-3 text-center">{team.goalsAgainst}</td>
+                  <td className="px-4 py-3 text-center font-bold text-primary">{team.points}</td>
+                </tr>
+              ))}
           </tbody>
         </table>
       </div>
-      )}
     </div>
   )
 }
