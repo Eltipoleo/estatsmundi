@@ -1,142 +1,154 @@
-import { useEffect, useState } from "react"
-import { Link } from "react-router-dom"
-import { BarChart, Bar, XAxis, YAxis, Tooltip, PieChart, Pie, Cell, Legend } from "recharts"
-import { Trophy, Users, Goal, TrendingUp } from "lucide-react"
-import { Card, CardHeader, StatBadge } from "../components/Card"
-import { apiFetch } from "../lib/api"
-import { teams as fallbackTeams, players as fallbackPlayers, matches as fallbackMatches, type Team, type Player, type Match } from "../data/mundial"
-import ApiStatus from "./ApiStatus"
+import { useEffect, useState } from 'react';
 
-const COLORS = ["#0b6e4f", "#e4b343", "#5b6472", "#c0392b"]
+// Declaración estricta de interfaces para evitar advertencias de TypeScript
+interface Team {
+  _id: string;
+  name: string;
+  points: number;
+}
+
+interface Player {
+  _id: string;
+  name: string;
+  team: string;
+  goals: number;
+}
 
 export default function Home() {
-  const [teamData, setTeamData] = useState<Team[]>(fallbackTeams)
-  const [playerData, setPlayerData] = useState<Player[]>(fallbackPlayers)
-  const [matchData, setMatchData] = useState<Match[]>(fallbackMatches)
+  const [teams, setTeams] = useState<Team[]>([]);
+  const [players, setPlayers] = useState<Player[]>([]);
+  const [loading, setLoading] = useState(true);
+
+  // URL base de tu backend en Render
+  const API_URL = 'https://estatsmundi.onrender.com/api';
 
   useEffect(() => {
-    async function loadHomeData() {
+    const fetchDashboardData = async () => {
       try {
-        const teams = await apiFetch<Team[]>("/api/teams")
-        if (Array.isArray(teams) && teams.length > 0) setTeamData(teams)
+        // 1. Obtener lista de equipos
+        const teamsRes = await fetch(`${API_URL}/teams`);
+        const teamsData = await teamsRes.json();
+        if (Array.isArray(teamsData)) {
+          // Ordenar por puntos de forma descendente (Mayor a Menor)
+          const sortedTeams = teamsData.sort((a: Team, b: Team) => b.points - a.points);
+          setTeams(sortedTeams);
+        }
+
+        // 2. Obtener lista de jugadores goleadores
+        const playersRes = await fetch(`${API_URL}/players`);
+        const playersData = await playersRes.json();
+        if (Array.isArray(playersData)) {
+          // Ordenar por número de goles de forma descendente (Mayor a Menor)
+          const sortedPlayers = playersData.sort((a: Player, b: Player) => b.goals - a.goals);
+          setPlayers(sortedPlayers);
+        }
       } catch (err) {
-        console.error("Error al cargar equipos de MongoDB:", err)
+        console.error('Error al sincronizar datos del Home:', err);
+      } finally {
+        setLoading(false);
       }
+    };
 
-      try {
-        const players = await apiFetch<Player[]>("/api/players")
-        if (Array.isArray(players) && players.length > 0) setPlayerData(players)
-      } catch (err) {
-        console.error("Error al cargar jugadores de MongoDB:", err)
-      }
-
-      try {
-        const matches = await apiFetch<Match[]>("/api/matches")
-        if (Array.isArray(matches) && matches.length > 0) setMatchData(matches)
-      } catch (err) {
-        console.error("Error al cargar partidos de MongoDB:", err)
-      }
-    }
-
-    void loadHomeData()
-  }, [])
-
-  // FILTRO SEGURO: Evita errores si un jugador en la BD viene corrupto o sin nombre
-  const topScorers = [...playerData]
-    .filter((p) => p && typeof p.name === "string")
-    .sort((a, b) => b.goals - a.goals)
-    .slice(0, 5)
-
-  const goalsData = topScorers.map((p) => ({ 
-    name: p.name ? p.name.split(" ").slice(-1)[0] : "Jugador", 
-    goles: p.goals 
-  }))
-
-  const pointsData = [...teamData]
-    .filter((t) => t && typeof t.name === "string")
-    .sort((a, b) => b.points - a.points)
-    .slice(0, 4)
-    .map((t) => ({ name: t.name, value: t.points }))
-
-  const totalGoals = teamData.reduce((s, t) => s + (t.goalsFor || 0), 0)
-  const finished = matchData.filter((m) => m && m.status === "Finalizado").length
+    fetchDashboardData();
+  }, []);
 
   return (
-    <div className="flex flex-col gap-6">
-      <section className="rounded-xl border bg-card p-6">
-        <ApiStatus />
-        <h1 className="text-2xl font-bold text-balance md:text-3xl">
-          Estadísticas y Predicciones del Mundial de Fútbol
-        </h1>
-        <p className="mt-2 max-w-2xl text-pretty text-muted-foreground">
-          Consulta estadísticas de equipos y jugadores, visualiza gráficas y revisa predicciones
-          automáticas basadas en datos históricos.
-        </p>
-        <div className="mt-4 flex gap-3">
-          <Link to="/equipos" className="rounded-lg bg-primary px-4 py-2 text-sm font-medium text-primary-foreground hover:opacity-90">
-            Ver equipos
-          </Link>
-          <Link to="/predicciones" className="rounded-lg border px-4 py-2 text-sm font-medium hover:bg-muted">
-            Predicciones
-          </Link>
+    <div style={{ maxWidth: '1100px', margin: '0 auto', padding: '25px', fontFamily: 'sans-serif', color: '#1e293b' }}>
+      
+      {/* 🟢 BLOC SUPERIOR DE CONTADORES EN TIEMPO REAL */}
+      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr 1fr', gap: '15px', marginBottom: '30px' }}>
+        <div style={{ background: '#fff', border: '1px solid #e2e8f0', borderRadius: '10px', padding: '15px', textAlign: 'center', boxShadow: '0 1px 2px 0 rgb(0 0 0 / 0.05)' }}>
+          <div style={{ fontSize: '24px', fontWeight: 'bold', color: '#0b6e4f' }}>{loading ? '...' : teams.length}</div>
+          <div style={{ fontSize: '12px', color: '#64748b', fontWeight: '500', marginTop: '4px' }}>Equipos Activos</div>
         </div>
-      </section>
-
-      <section className="grid grid-cols-2 gap-4 md:grid-cols-4">
-        <StatBadge label="Equipos" value={teamData.length} accent />
-        <StatBadge label="Jugadores" value={playerData.length} />
-        <StatBadge label="Goles totales" value={totalGoals} />
-        <StatBadge label="Partidos jugados" value={finished} />
-      </section>
-
-      <section className="grid gap-6 lg:grid-cols-2">
-        <Card>
-          <CardHeader title="Goleadores" subtitle="Top 5 máximos anotadores" icon={<Goal size={18} />} />
-          {/* Contenedor con ancho fijo interno para centrar el gráfico de barras */}
-          <div className="w-full h-64 p-4 flex justify-center items-center overflow-hidden">
-            <BarChart width={450} height={240} data={goalsData}>
-              <XAxis dataKey="name" tick={{ fontSize: 12 }} />
-              <YAxis allowDecimals={false} tick={{ fontSize: 12 }} />
-              <Tooltip />
-              <Bar dataKey="goles" fill="#0b6e4f" radius={[6, 6, 0, 0]} />
-            </BarChart>
+        <div style={{ background: '#fff', border: '1px solid #e2e8f0', borderRadius: '10px', padding: '15px', textAlign: 'center', boxShadow: '0 1px 2px 0 rgb(0 0 0 / 0.05)' }}>
+          <div style={{ fontSize: '24px', fontWeight: 'bold', color: '#0b6e4f' }}>{loading ? '...' : players.length}</div>
+          <div style={{ fontSize: '12px', color: '#64748b', fontWeight: '500', marginTop: '4px' }}>Goleadores Registrados</div>
+        </div>
+        <div style={{ background: '#fff', border: '1px solid #e2e8f0', borderRadius: '10px', padding: '15px', textAlign: 'center', boxShadow: '0 1px 2px 0 rgb(0 0 0 / 0.05)' }}>
+          <div style={{ fontSize: '24px', fontWeight: 'bold', color: '#0b6e4f' }}>
+            {loading ? '...' : players.reduce((acc, curr) => acc + curr.goals, 0)}
           </div>
-        </Card>
+          <div style={{ fontSize: '12px', color: '#64748b', fontWeight: '500', marginTop: '4px' }}>Goles Totales</div>
+        </div>
+        <div style={{ background: '#fff', border: '1px solid #e2e8f0', borderRadius: '10px', padding: '15px', textAlign: 'center', boxShadow: '0 1px 2px 0 rgb(0 0 0 / 0.05)' }}>
+          <div style={{ fontSize: '24px', fontWeight: 'bold', color: '#0b6e4f' }}>En Línea</div>
+          <div style={{ fontSize: '12px', color: '#0b6e4f', fontWeight: 'bold', marginTop: '4px' }}>● MongoDB Conectado</div>
+        </div>
+      </div>
 
-        <Card>
-          <CardHeader title="Puntos por equipo" subtitle="Líderes del torneo" icon={<TrendingUp size={18} />} />
-          {/* Contenedor estable para el gráfico de Pay */}
-          <div className="w-full h-64 p-4 flex justify-center items-center overflow-hidden">
-            <PieChart width={450} height={240}>
-              <Pie data={pointsData} dataKey="value" nameKey="name" cx="50%" cy="45%" outerRadius={75} label>
-                {pointsData.map((_, i) => (
-                  <Cell key={i} fill={COLORS[i % COLORS.length]} />
+      {/* 🔵 SECCIÓN DE TABLAS PRINCIPALES */}
+      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '25px' }}>
+        
+        {/* PANEL GOLEADORES */}
+        <div style={{ background: '#fff', border: '1px solid #e2e8f0', borderRadius: '12px', padding: '24px', boxShadow: '0 4px 6px -1px rgb(0 0 0 / 0.05)' }}>
+          <h3 style={{ margin: '0 0 20px 0', color: '#0b6e4f', fontSize: '18px', borderBottom: '1px solid #f1f5f9', paddingBottom: '10px' }}>
+            ⚽ Goleadores (Top 5 Máximos Anotadores)
+          </h3>
+          {loading ? (
+            <p style={{ color: '#64748b', fontSize: '14px' }}>Cargando estadísticas de jugadores...</p>
+          ) : players.length === 0 ? (
+            <p style={{ color: '#64748b', fontSize: '14px' }}>No hay goleadores guardados en la base de datos por el administrador.</p>
+          ) : (
+            <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '14px', textAlign: 'left' }}>
+              <thead>
+                <tr style={{ borderBottom: '2px solid #e2e8f0', color: '#475569', fontWeight: '600' }}>
+                  <th style={{ padding: '8px 10px' }}>Jugador</th>
+                  <th style={{ padding: '8px 10px' }}>Equipo o Club</th>
+                  <th style={{ padding: '8px 10px', textAlign: 'center', width: '80px' }}>Goles</th>
+                </tr>
+              </thead>
+              <tbody>
+                {players.slice(0, 5).map((player, idx) => (
+                  <tr key={player._id} style={{ borderBottom: '1px solid #f1f5f9', background: idx % 2 === 0 ? '#f8fafc' : '#fff' }}>
+                    <td style={{ padding: '12px 10px', fontWeight: '600' }}>{player.name}</td>
+                    <td style={{ padding: '12px 10px', color: '#64748b' }}>{player.team}</td>
+                    <td style={{ padding: '12px 10px', textAlign: 'center', fontWeight: 'bold', color: '#0b6e4f', fontSize: '15px' }}>{player.goals}</td>
+                  </tr>
                 ))}
-              </Pie>
-              <Legend verticalAlign="bottom" height={36} />
-              <Tooltip />
-            </PieChart>
-          </div>
-        </Card>
-      </section>
+              </tbody>
+            </table>
+          )}
+        </div>
 
-      <section className="grid gap-4 sm:grid-cols-3">
-        <Link to="/equipos" className="group rounded-xl border bg-card p-5 transition-colors hover:border-primary">
-          <Trophy className="text-primary" />
-          <h3 className="mt-3 font-semibold">Equipos</h3>
-          <p className="text-sm text-muted-foreground">Tabla de posiciones y estadísticas.</p>
-        </Link>
-        <Link to="/jugadores" className="group rounded-xl border bg-card p-5 transition-colors hover:border-primary">
-          <Users className="text-primary" />
-          <h3 className="mt-3 font-semibold">Jugadores</h3>
-          <p className="text-sm text-muted-foreground">Goles, asistencias y partidos.</p>
-        </Link>
-        <Link to="/predicciones" className="group rounded-xl border bg-card p-5 transition-colors hover:border-primary">
-          <TrendingUp className="text-primary" />
-          <h3 className="mt-3 font-semibold">Predicciones</h3>
-          <p className="text-sm text-muted-foreground">Probabilidades de resultados.</p>
-        </Link>
-      </section>
+        {/* PANEL TABLA DE POSICIONES */}
+        <div style={{ background: '#fff', border: '1px solid #e2e8f0', borderRadius: '12px', padding: '24px', boxShadow: '0 4px 6px -1px rgb(0 0 0 / 0.05)' }}>
+          <h3 style={{ margin: '0 0 20px 0', color: '#0b6e4f', fontSize: '18px', borderBottom: '1px solid #f1f5f9', paddingBottom: '10px' }}>
+            📈 Líderes del Torneo (Puntos por Equipo)
+          </h3>
+          {loading ? (
+            <p style={{ color: '#64748b', fontSize: '14px' }}>Cargando posiciones del torneo...</p>
+          ) : teams.length === 0 ? (
+            <p style={{ color: '#64748b', fontSize: '14px' }}>No hay puntuaciones registradas en este momento.</p>
+          ) : (
+            <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '14px', textAlign: 'left' }}>
+              <thead>
+                <tr style={{ borderBottom: '2px solid #e2e8f0', color: '#475569', fontWeight: '600' }}>
+                  <th style={{ padding: '8px 10px', width: '50px', textAlign: 'center' }}>Pos</th>
+                  <th style={{ padding: '8px 10px' }}>Club / Selección</th>
+                  <th style={{ padding: '8px 10px', textAlign: 'center', width: '80px' }}>Pts</th>
+                </tr>
+              </thead>
+              <tbody>
+                {teams.map((team, idx) => (
+                  <tr key={team._id} style={{ borderBottom: '1px solid #f1f5f9', background: idx === 0 ? '#f0fdf4' : idx % 2 === 0 ? '#f8fafc' : '#fff' }}>
+                    <td style={{ padding: '12px 10px', textAlign: 'center', fontWeight: 'bold', color: idx === 0 ? '#166534' : '#64748b' }}>
+                      {idx + 1}
+                    </td>
+                    <td style={{ padding: '12px 10px', fontWeight: idx === 0 ? '600' : 'normal', color: idx === 0 ? '#166534' : '#1e293b' }}>
+                      {team.name}
+                    </td>
+                    <td style={{ padding: '12px 10px', textAlign: 'center', fontWeight: 'bold', color: '#0f172a' }}>
+                      {team.points}
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          )}
+        </div>
+
+      </div>
     </div>
-  )
+  );
 }
