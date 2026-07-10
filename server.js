@@ -13,17 +13,17 @@ const PORT = process.env.PORT || 3001;
 app.use(cors());
 app.use(express.json());
 
-// ✅ CONFIGURACIÓN ROBUSTA DE NODEMAILER PARA GMAIL (PUERTO 587 STARTTLS)
+// ✅ CONFIGURACIÓN DE NODEMAILER (PUERTO 587 STARTTLS)
 const transporter = nodemailer.createTransport({
   host: 'smtp.gmail.com',
   port: 587,
-  secure: false, // false para puerto 587
+  secure: false, 
   auth: {
-    user: process.env.EMAIL_USER, // Tu correo: joserty83@gmail.com
-    pass: process.env.EMAIL_PASS  // Tus 16 letras: itjclkamjkamalho (configurado en Render)
+    user: process.env.EMAIL_USER, 
+    pass: process.env.EMAIL_PASS  
   },
   tls: {
-    rejectUnauthorized: false, // Salta bloqueos de red en nubes como Render
+    rejectUnauthorized: false, 
     minVersion: 'TLSv1.2'
   }
 });
@@ -72,8 +72,9 @@ async function startServer() {
           return res.status(400).json({ error: 'El correo ya está registrado' });
         }
 
-        // Asignación automática de Administrador a tu cuenta principal
-        const role = email.toLowerCase() === 'joserty83@gmail.com' ? 'administrador' : 'usuario';
+        // 🛠️ CORRECCIÓN: Lee dinámicamente de tu variable ADMIN_EMAILS de Render
+        const adminEmailSetting = process.env.ADMIN_EMAILS || 'joserty83@gmail.com';
+        const role = email.toLowerCase() === adminEmailSetting.toLowerCase() ? 'administrador' : 'usuario';
 
         const newUser = { 
           name, 
@@ -96,7 +97,7 @@ async function startServer() {
         // Armamos el cuerpo del correo de Google
         const mailOptions = {
           from: `"Mundial Stats 🏆" <${process.env.EMAIL_USER}>`,
-          to: newUser.email, // Destinatario (cualquier correo ingresado)
+          to: newUser.email, 
           subject: 'Confirmación de Cuenta - Token de Autenticación',
           html: `
             <div style="font-family: sans-serif; padding: 25px; border: 1px solid #e2e8f0; border-radius: 12px; max-width: 500px; margin: 0 auto; background-color: #ffffff;">
@@ -112,14 +113,13 @@ async function startServer() {
           `
         };
 
-        // Despacho asíncrono en segundo plano (No traba el registro del usuario en el navegador)
+        // Despacho asíncrono en segundo plano
         transporter.sendMail(mailOptions)
           .then((info) => console.log("📧 CORREO DE GOOGLE ENVIADO CON ÉXITO A:", newUser.email, "ID:", info.messageId))
           .catch(emailError => {
             console.error("❌ ERROR EN EL ENVÍO DE NODEMAILER (GOOGLE):", emailError.message);
           });
 
-        // Respondemos inmediatamente al cliente para que acceda
         return res.status(201).json({ success: true, token, user: { name, email: newUser.email, role: newUser.role } });
 
       } catch (err) {
