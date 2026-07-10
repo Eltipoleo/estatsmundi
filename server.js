@@ -13,17 +13,13 @@ const PORT = process.env.PORT || 3001;
 app.use(cors());
 app.use(express.json());
 
-// 🔒 CONFIGURACIÓN LIMPIA Y DIRECTA PARA GMAIL
+// Transporter nativo de Gmail
 const transporter = nodemailer.createTransport({
   service: 'gmail',
   auth: {
-    user: process.env.EMAIL_USER, // Tu correo de gmail
-    pass: process.env.EMAIL_PASS  // Las 16 letras seguidas sin espacios
+    user: process.env.EMAIL_USER,
+    pass: process.env.EMAIL_PASS
   }
-});
-
-app.get('/api/health', (req, res) => {
-  res.json({ status: 'ok', database: process.env.MONGODB_DB ? 'configured' : 'using default' });
 });
 
 const client = new MongoClient(process.env.MONGODB_URI || 'mongodb://127.0.0.1:27017');
@@ -37,26 +33,27 @@ async function startServer() {
 
     const isAdmin = (req, res, next) => {
       const authHeader = req.headers.authorization;
-      if (!authHeader) return res.status(401).json({ error: 'Falta token de autenticación' });
+      if (!authHeader) return res.status(401).json({ error: 'Falta token' });
       const token = authHeader.split(' ')[1];
       try {
         const decoded = jwt.verify(token, process.env.JWT_SECRET || 'secret_fallback');
         if (decoded.role === 'administrador' || decoded.role === 'admin') {
           req.user = decoded;
           next();
-        } else {
-          return res.status(403).json({ error: 'Acceso denegado' });
-        }
+        } else { return res.status(403).json({ error: 'Denegado' }); }
       } catch (err) { return res.status(401).json({ error: 'Token inválido' }); }
     };
 
-    // =================================================
-    // 🔑 ENDPOINT DE REGISTRO (MANDA LINK DE ACTIVACIÓN)
-    // =================================================
+    // 🔑 REGISTRO EMPAREJADO CON EL FRONTEND
     app.post('/api/auth/register', async (req, res) => {
       try {
         const { name, email, password } = req.body;
         
+        // FRENO DE SEGURIDAD: Si el frontend manda los campos vacíos o mal mapeados
+        if (!name || !email || !password) {
+          return res.status(400).json({ error: 'Faltan campos obligatorios en la petición (name, email o password)' });
+        }
+
         const userExists = await db.collection('users').findOne({ email: email.toLowerCase() });
         if (userExists) {
           return res.status(400).json({ error: 'El correo ya está registrado' });
@@ -90,59 +87,42 @@ async function startServer() {
           subject: 'Activa tu cuenta - Mundial Stats',
           html: `
             <div style="font-family: sans-serif; padding: 30px; border: 1px solid #e2e8f0; border-radius: 12px; max-width: 480px; margin: 0 auto; background-color: #ffffff; text-align: center;">
-              <h2 style="color: #0b6e4f; margin-top: 0;">¡Hola, ${name}!</h2>
-              <p style="color: #475569; font-size: 15px;">Gracias por registrarte. Para poder iniciar sesión en la plataforma de estadísticas, es necesario que confirmes tu identidad.</p>
+              <h2>¡Hola, ${name}!</h2>
+              <p>Confirma tu identidad para activar tu cuenta en la plataforma.</p>
               <div style="margin: 25px 0;">
-                <a href="${activationUrl}" target="_blank" style="background-color: #0b6e4f; color: #ffffff; padding: 12px 24px; font-weight: bold; font-size: 14px; text-decoration: none; border-radius: 6px; display: inline-block;">
+                <a href="${activationUrl}" target="_blank" style="background-color: #0b6e4f; color: #ffffff; padding: 12px 24px; font-weight: bold; text-decoration: none; border-radius: 6px; display: inline-block;">
                   Activar Mi Cuenta Aquí
                 </a>
               </div>
-              <p style="color: #94a3b8; font-size: 11px;">Este enlace de seguridad expirará en 1 hora.</p>
             </div>
           `
         };
 
         transporter.sendMail(mailOptions)
-          .then(() => console.log("📧 ENLACE DE ACTIVACIÓN ENVIADO CON ÉXITO A:", newUser.email))
+          .then(() => console.log("📧 ENLACE ENVIADO A:", newUser.email))
           .catch(err => console.error("❌ ERROR EN GMAIL:", err.message));
 
-        return res.status(201).json({ success: true, message: 'Registro previo completado. Por favor, revisa tu correo electrónico para activar la cuenta.' });
+        return res.status(201).json({ success: true, message: 'Revisa tu correo electrónico para activar la cuenta.' });
 
       } catch (err) {
-        return res.status(500).json({ error: 'Error interno en el servidor' });
+        return res.status(500).json({ error: 'Error interno' });
       }
     });
 
-    // ==========================================
-    // 🔗 ENDPOINT DE PROCESAMIENTO DEL CLIC (GET)
-    // ==========================================
+    // 🔗 VERIFICACIÓN DEL LINK
     app.get('/api/auth/verify', async (req, res) => {
       const { token } = req.query;
-      
-      if (!token) {
-        return res.status(400).send('<h1>Error: Falta el token de activación</h1>');
-      }
-
+      if (!token) return res.status(400).send('<h1>Falta el token</h1>');
       try {
         const decoded = jwt.verify(token, process.env.JWT_SECRET || 'secret_fallback');
-        
-        const result = await db.collection('users').updateOne(
-          { email: decoded.email.toLowerCase() },
-          { $set: { emailVerified: true } }
-        );
-
-        if (result.matchedCount === 0) {
-          return res.status(404).send('<h1>Error: El usuario no existe</h1>');
-        }
-
+        await db.collection('users').updateOne({ email: decoded.email.toLowerCase() }, { $set: { emailVerified: true } });
         return res.redirect('https://estatsmundi.vercel.app/login?activated=true');
-
       } catch (err) {
-        return res.status(400).send('<h1>El enlace de activación es inválido o ha expirado.</h1>');
+        return res.status(400).send('<h1>Enlace vencido o inválido</h1>');
       }
     });
 
-    // Endpoint de Login
+    // 🔑 LOGIN CORREGIDO
     app.post('/api/auth/login', async (req, res) => {
       try {
         const { email, password } = req.body;
@@ -153,7 +133,7 @@ async function startServer() {
         }
 
         if (user.emailVerified === false) {
-          return res.status(401).json({ error: 'Tu cuenta no ha sido activada. Por favor, revisa tu correo electrónico.', emailVerified: false });
+          return res.status(401).json({ error: 'Tu cuenta no ha sido activada.', emailVerified: false });
         }
 
         const token = jwt.sign({ id: user._id, email: user.email, role: user.role }, process.env.JWT_SECRET || 'secret_fallback', { expiresIn: '24h' });
@@ -161,7 +141,6 @@ async function startServer() {
       } catch (err) { return res.status(500).json({ error: 'Error interno' }); }
     });
 
-    // --- MANTENIMIENTO DE RUTAS PÚBLICAS Y DE ADMIN ---
     app.get('/api/teams', async (req, res) => {
       try { const data = await db.collection('teams').find({}).toArray(); return res.json(data); } catch (e) { return res.status(500).json({ error: 'Error' }); }
     });
@@ -169,22 +148,13 @@ async function startServer() {
       try { const data = await db.collection('players').find({}).toArray(); return res.json(data); } catch (e) { return res.status(500).json({ error: 'Error' }); }
     });
     app.post('/api/admin/teams', isAdmin, async (req, res) => {
-      try {
-        const { name, points } = req.body;
-        await db.collection('teams').insertOne({ name, points: Number(points) || 0, createdAt: new Date() });
-        return res.status(201).json({ success: true });
-      } catch (err) { return res.status(500).json({ error: 'Error' }); }
+      try { const { name, points } = req.body; await db.collection('teams').insertOne({ name, points: Number(points) || 0, createdAt: new Date() }); return res.status(201).json({ success: true }); } catch (err) { return res.status(500).json({ error: 'Error' }); }
     });
     app.post('/api/admin/players', isAdmin, async (req, res) => {
-      try {
-        const { name, team, goals } = req.body;
-        await db.collection('players').insertOne({ name, team, goals: Number(goals) || 0, createdAt: new Date() });
-        return res.status(201).json({ success: true });
-      } catch (err) { return res.status(500).json({ error: 'Error' }); }
+      try { const { name, team, goals } = req.body; await db.collection('players').insertOne({ name, team, goals: Number(goals) || 0, createdAt: new Date() }); return res.status(201).json({ success: true }); } catch (err) { return res.status(500).json({ error: 'Error' }); }
     });
 
-    app.listen(PORT, () => console.log(`🚀 Servidor backend corriendo en el puerto ${PORT}`));
+    app.listen(PORT, () => console.log(`🚀 Backend en puerto ${PORT}`));
   } catch (error) { process.exit(1); }
 }
-
 startServer();

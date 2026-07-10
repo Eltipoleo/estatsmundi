@@ -1,133 +1,79 @@
-import React, { useState } from "react";
-import { useNavigate, Link } from "react-router-dom";
-import { UserPlus, Mail, Lock, User, AlertCircle } from "lucide-react";
+import React, { useState } from 'react';
 
 export default function Register() {
-  const [name, setName] = useState("");
-  const [email, setEmail] = useState("");
-  const [password, setPassword] = useState("");
-  const [error, setError] = useState<string | null>(null);
+  const [nombre, setNombre] = useState('');
+  const [correo, setCorreo] = useState('');
+  const [contrasena, setContrasena] = useState('');
+  const [message, setMessage] = useState('');
+  const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
-  const navigate = useNavigate();
 
-  const handleSubmit = async (e: React.FormEvent) => {
+  const API_URL = 'https://estatsmundi.onrender.com/api';
+
+  const handleRegister = async (e: React.FormEvent) => {
     e.preventDefault();
-    setError(null);
+    setError('');
+    setMessage('');
     setLoading(true);
 
     try {
-      // 1. Obtener la URL base limpia
-      let baseUrl = (import.meta as any).env.VITE_API_BASE_URL || "http://localhost:3001";
-      if (baseUrl.endsWith("/")) baseUrl = baseUrl.slice(0, -1);
-
-      // 2. Petición directa al endpoint del server.js de Render
-      const response = await fetch(`${baseUrl}/api/auth/register`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ name, email, password }),
+      const response = await fetch(`${API_URL}/auth/register`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          name: nombre.trim(),           // Asegura match con Node.js
+          email: correo.trim().toLowerCase(), // Asegura match con Node.js
+          password: contrasena.trim(),   // Asegura match con Node.js
+        }),
       });
 
       const data = await response.json();
 
       if (!response.ok) {
-        throw new Error(data.error || "Error al registrarse");
+        throw new Error(data.error || 'No se pudo completar el registro.');
       }
 
-      // 3. Guardar sesión de forma local
-      localStorage.setItem("token", data.token);
-      localStorage.setItem("user", JSON.stringify(data.user));
+      setMessage(data.message || '🏆 ¡Registro completado! Por favor, revisa tu correo electrónico para activar tu cuenta.');
+      setNombre('');
+      setCorreo('');
+      setContrasena('');
 
-      // 4. Redirigir al inicio con sesión activa
-      navigate("/");
-      window.location.reload();
     } catch (err: any) {
-      console.error("Error en registro:", err);
-      setError(err.message || "Ocurrió un error inesperado.");
+      console.error(err);
+      setError(err.message);
     } finally {
       setLoading(false);
     }
   };
 
   return (
-    <div className="flex min-h-[calc(100vh-10rem)] items-center justify-center p-4">
-      <div className="w-full max-w-md rounded-2xl border bg-card p-8 shadow-sm">
-        <div className="flex flex-col items-center text-center">
-          <div className="rounded-full bg-primary/10 p-3 text-primary">
-            <UserPlus size={24} />
-          </div>
-          <h1 className="mt-4 text-2xl font-bold">Crear cuenta</h1>
-          <p className="text-sm text-muted-foreground">Regístrate para usar el sistema.</p>
+    <div style={{ display: 'flex', minHeight: '80vh', alignItems: 'center', justifyContent: 'center', fontFamily: 'sans-serif', padding: '20px' }}>
+      <div style={{ background: '#fff', border: '1px solid #e2e8f0', padding: '35px', borderRadius: '12px', width: '100%', maxWidth: '400px', boxShadow: '0 4px 6px -1px rgb(0 0 0 / 0.05)' }}>
+        <div style={{ textAlign: 'center', marginBottom: '25px' }}>
+          <h2 style={{ color: '#0b6e4f', margin: '0' }}>Crear Cuenta</h2>
+          <p style={{ color: '#64748b', fontSize: '14px', margin: '5px 0 0 0' }}>Regístrate en la plataforma del Mundial</p>
         </div>
 
-        {error && (
-          <div className="mt-6 flex items-center gap-2 rounded-lg bg-destructive/10 p-3 text-sm text-destructive">
-            <AlertCircle size={16} className="shrink-0" />
-            <span>{error}</span>
-          </div>
-        )}
+        {message && <div style={{ backgroundColor: '#f0fdf4', border: '1px solid #bbf7d0', color: '#166534', padding: '12px', borderRadius: '6px', fontSize: '14px', marginBottom: '15px' }}>{message}</div>}
+        {error && <div style={{ backgroundColor: '#fef2f2', border: '1px solid #fca5a5', color: '#b91c1c', padding: '11px', borderRadius: '6px', fontSize: '14px', marginBottom: '15px' }}>{error}</div>}
 
-        <form onSubmit={handleSubmit} className="mt-6 space-y-4">
-          <div>
-            <label className="text-sm font-medium">Nombre</label>
-            <div className="relative mt-1">
-              <User className="absolute top-3 left-3 h-4 w-4 text-muted-foreground" />
-              <input
-                type="text"
-                required
-                value={name}
-                onChange={(e) => setName(e.target.value)}
-                className="w-full rounded-lg border bg-background py-2 pr-4 pl-10 text-sm focus:border-primary focus:outline-none"
-                placeholder="Tu nombre completo"
-              />
-            </div>
+        <form onSubmit={handleRegister} style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
+            <label style={{ fontSize: '13px', fontWeight: 600 }}>Nombre de usuario</label>
+            <input type="text" placeholder="Tu nombre" value={nombre} onChange={(e) => setNombre(e.target.value)} required style={{ padding: '10px 12px', borderRadius: '6px', border: '1px solid #cbd5e1' }} />
           </div>
-
-          <div>
-            <label className="text-sm font-medium">Correo electrónico</label>
-            <div className="relative mt-1">
-              <Mail className="absolute top-3 left-3 h-4 w-4 text-muted-foreground" />
-              <input
-                type="email"
-                required
-                value={email}
-                onChange={(e) => setEmail(e.target.value)}
-                className="w-full rounded-lg border bg-background py-2 pr-4 pl-10 text-sm focus:border-primary focus:outline-none"
-                placeholder="correo@ejemplo.com"
-              />
-            </div>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
+            <label style={{ fontSize: '13px', fontWeight: 600 }}>Correo electrónico</label>
+            <input type="email" placeholder="correo@ejemplo.com" value={correo} onChange={(e) => setCorreo(e.target.value)} required style={{ padding: '10px 12px', borderRadius: '6px', border: '1px solid #cbd5e1' }} />
           </div>
-
-          <div>
-            <label className="text-sm font-medium">Contraseña</label>
-            <div className="relative mt-1">
-              <Lock className="absolute top-3 left-3 h-4 w-4 text-muted-foreground" />
-              <input
-                type="password"
-                required
-                minLength={6}
-                value={password}
-                onChange={(e) => setPassword(e.target.value)}
-                className="w-full rounded-lg border bg-background py-2 pr-4 pl-10 text-sm focus:border-primary focus:outline-none"
-                placeholder="••••••••"
-              />
-            </div>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
+            <label style={{ fontSize: '13px', fontWeight: 600 }}>Contraseña</label>
+            <input type="password" placeholder="Contraseña" value={contrasena} onChange={(e) => setContrasena(e.target.value)} required style={{ padding: '10px 12px', borderRadius: '6px', border: '1px solid #cbd5e1' }} />
           </div>
-
-          <button
-            type="submit"
-            disabled={loading}
-            className="w-full rounded-lg bg-primary py-2.5 text-sm font-medium text-primary-foreground transition-opacity hover:opacity-90 disabled:opacity-50"
-          >
-            {loading ? "Registrando..." : "Registrarme"}
+          <button type="submit" disabled={loading} style={{ backgroundColor: '#0b6e4f', color: '#fff', border: 'none', padding: '12px', borderRadius: '6px', fontWeight: 'bold', cursor: 'pointer', opacity: loading ? 0.7 : 1 }}>
+            {loading ? 'Registrando...' : 'Registrar Cuenta'}
           </button>
         </form>
-
-        <p className="mt-6 text-center text-sm text-muted-foreground">
-          ¿Ya tienes cuenta?{" "}
-          <Link to="/login" className="font-medium text-primary hover:underline">
-            Inicia sesión
-          </Link>
-        </p>
       </div>
     </div>
   );
