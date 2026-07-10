@@ -2,6 +2,7 @@ import { BrowserRouter as Router, Routes, Route } from 'react-router-dom';
 import Navbar from './components/Navbar';
 import Home from './pages/Home';
 import Login from './pages/Login';
+import Register from './pages/Register'; // 👈 Aseguramos la importación completa
 import Admin from './pages/Admin';
 import Teams from './pages/Teams';
 import Players from './pages/Players';
@@ -17,6 +18,7 @@ export default function App() {
           {/* 🔓 PUBLIC ROUTES */}
           <Route path="/" element={<Home />} />
           <Route path="/login" element={<Login />} />
+          <Route path="/register" element={<Register />} /> {/* 👈 REGISTRADA FORMALMENTE */}
           <Route path="/equipos" element={<Teams />} />
           <Route path="/jugadores" element={<Players />} />
           <Route path="/predicciones" element={<Predictions />} />
