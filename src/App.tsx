@@ -3,30 +3,27 @@ import Navbar from './components/Navbar';
 import Home from './pages/Home';
 import Login from './pages/Login';
 import Admin from './pages/Admin';
-import ProtectedRoute from './components/ProtectedRoute'; // Ajusta la ruta si tu archivo está en otra carpeta
-
-// Páginas de relleno por si tienes pestañas comunes creadas
-const Equipos = () => <div style={{ padding: '20px' }}><h2>Sección Equipos</h2></div>;
-const Jugadores = () => <div style={{ padding: '20px' }}><h2>Sección Jugadores</h2></div>;
-const Predicciones = () => <div style={{ padding: '20px' }}><h2>Sección Predicciones</h2></div>;
+import ProtectedRoute from './components/ProtectedRoute';
 
 export default function App() {
   return (
     <Router>
-      <Navbar />
-      <main style={{ minHeight: 'calc(100vh - 64px)', background: '#f8fafc' }}>
+      {/* El Navbar ya tiene try/catch interno, no romperá */}
+      <Navbar /> 
+      
+      <main style={{ minHeight: 'calc(100vh - 64px)', background: '#f8fafc', padding: '10px' }}>
         <Routes>
-          {/* 🔓 RUTAS PÚBLICAS */}
+          {/* 🔓 RUTAS PÚBLICAS BÁSICAS */}
           <Route path="/" element={<Home />} />
           <Route path="/login" element={<Login />} />
-          <Route path="/equipos" element={<Equipos />} />
-          <Route path="/jugadores" element={<Jugadores />} />
-          <Route path="/predicciones" element={<Predicciones />} />
 
-          {/* 🛡️ RUTAS PROTEGIDAS (Solo entran administradores autenticados) */}
+          {/* 🛡️ RUTA PROTEGIDA DE ADMINISTRACIÓN */}
           <Route element={<ProtectedRoute />}>
             <Route path="/admin" element={<Admin />} />
           </Route>
+
+          {/* RUTA DE RESPALDO: Si escribes cualquier otra cosa, te manda al Home en lugar de quedarse en blanco */}
+          <Route path="*" element={<Home />} />
         </Routes>
       </main>
     </Router>
