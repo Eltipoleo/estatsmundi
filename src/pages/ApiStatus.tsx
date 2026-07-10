@@ -6,7 +6,8 @@ export default function ApiStatus() {
   useEffect(() => {
     const checkHealth = async () => {
       try {
-        const response = await fetch("http://localhost:3001/api/health")
+        const baseUrl = import.meta.env.VITE_API_BASE_URL || "http://localhost:3001";
+        const response = await fetch(`${baseUrl}/api/health`);
         setStatus(response.ok ? "online" : "offline")
       } catch {
         setStatus("offline")
