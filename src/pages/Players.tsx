@@ -1,8 +1,35 @@
-import { useState } from "react"
-import { players } from "../data/mundial"
+import { useEffect, useState } from "react"
+import { collection, onSnapshot } from "firebase/firestore"
+import { db } from "../firebase"
+import { players as fallbackPlayers, type Player } from "../data/mundial"
 
 export default function Players() {
   const [query, setQuery] = useState("")
+  const [players, setPlayers] = useState<Player[]>(fallbackPlayers)
+  const [loading, setLoading] = useState(true)
+  const [error, setError] = useState("")
+
+  useEffect(() => {
+    const unsub = onSnapshot(
+      collection(db, "players"),
+      (snap) => {
+        const next = snap.docs.map((docSnap) => ({ ...(docSnap.data() as Player), id: Number(docSnap.id) }))
+        if (next.length > 0) {
+          setPlayers(next)
+        }
+        setLoading(false)
+        setError("")
+      },
+      (err) => {
+        console.error("Error al cargar jugadores desde Firestore", err)
+        setError("No se pudieron cargar los jugadores desde la base de datos")
+        setLoading(false)
+      },
+    )
+
+    return () => unsub()
+  }, [])
+
   const sorted = [...players].sort((a, b) => b.goals - a.goals)
   const filtered = sorted.filter(
     (p) => p.name.toLowerCase().includes(query.toLowerCase()) || p.team.toLowerCase().includes(query.toLowerCase()),
@@ -24,7 +51,15 @@ export default function Players() {
       </div>
 
       <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
-        {filtered.length === 0 ? (
+        {loading ? (
+          <div className="col-span-full rounded-lg border border-muted bg-muted/50 p-8 text-center text-muted-foreground">
+            Cargando datos desde la API propia...
+          </div>
+        ) : error ? (
+          <div className="col-span-full rounded-lg border border-destructive/30 bg-destructive/10 p-4 text-sm text-destructive">
+            {error}
+          </div>
+        ) : filtered.length === 0 ? (
           <div className="col-span-full rounded-lg border border-muted bg-muted/50 p-8 text-center text-muted-foreground">
             No se encontraron jugadores.
           </div>

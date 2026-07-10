@@ -1,21 +1,53 @@
+import { useEffect, useState } from "react"
 import { Link } from "react-router-dom"
 import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, PieChart, Pie, Cell, Legend } from "recharts"
 import { Trophy, Users, Goal, TrendingUp } from "lucide-react"
 import { Card, CardHeader, StatBadge } from "../components/Card"
-import { teams, players, matches } from "../data/mundial"
+import { db } from "../firebase"
+import { collection, onSnapshot } from "firebase/firestore"
+import { teams as fallbackTeams, players as fallbackPlayers, matches as fallbackMatches, type Team, type Player, type Match } from "../data/mundial"
+import ApiStatus from "./ApiStatus"
 
 const COLORS = ["#0b6e4f", "#e4b343", "#5b6472", "#c0392b"]
 
 export default function Home() {
-  const topScorers = [...players].sort((a, b) => b.goals - a.goals).slice(0, 5)
+  const [teamData, setTeamData] = useState<Team[]>(fallbackTeams)
+  const [playerData, setPlayerData] = useState<Player[]>(fallbackPlayers)
+  const [matchData, setMatchData] = useState<Match[]>(fallbackMatches)
+
+  useEffect(() => {
+    const unsubTeams = onSnapshot(collection(db, "teams"), (snap) => {
+      const next = snap.docs.map((docSnap) => ({ ...(docSnap.data() as Team), id: Number(docSnap.id) }))
+      if (next.length > 0) setTeamData(next)
+    })
+
+    const unsubPlayers = onSnapshot(collection(db, "players"), (snap) => {
+      const next = snap.docs.map((docSnap) => ({ ...(docSnap.data() as Player), id: Number(docSnap.id) }))
+      if (next.length > 0) setPlayerData(next)
+    })
+
+    const unsubMatches = onSnapshot(collection(db, "matches"), (snap) => {
+      const next = snap.docs.map((docSnap) => ({ ...(docSnap.data() as Match), id: Number(docSnap.id) }))
+      if (next.length > 0) setMatchData(next)
+    })
+
+    return () => {
+      unsubTeams()
+      unsubPlayers()
+      unsubMatches()
+    }
+  }, [])
+
+  const topScorers = [...playerData].sort((a, b) => b.goals - a.goals).slice(0, 5)
   const goalsData = topScorers.map((p) => ({ name: p.name.split(" ").slice(-1)[0], goles: p.goals }))
-  const pointsData = [...teams].sort((a, b) => b.points - a.points).slice(0, 4).map((t) => ({ name: t.name, value: t.points }))
-  const totalGoals = teams.reduce((s, t) => s + t.goalsFor, 0)
-  const finished = matches.filter((m) => m.status === "Finalizado").length
+  const pointsData = [...teamData].sort((a, b) => b.points - a.points).slice(0, 4).map((t) => ({ name: t.name, value: t.points }))
+  const totalGoals = teamData.reduce((s, t) => s + t.goalsFor, 0)
+  const finished = matchData.filter((m) => m.status === "Finalizado").length
 
   return (
     <div className="flex flex-col gap-6">
       <section className="rounded-xl border bg-card p-6">
+        <ApiStatus />
         <h1 className="text-2xl font-bold text-balance md:text-3xl">
           Estadísticas y Predicciones del Mundial de Fútbol
         </h1>
@@ -34,8 +66,8 @@ export default function Home() {
       </section>
 
       <section className="grid grid-cols-2 gap-4 md:grid-cols-4">
-        <StatBadge label="Equipos" value={teams.length} accent />
-        <StatBadge label="Jugadores" value={players.length} />
+        <StatBadge label="Equipos" value={teamData.length} accent />
+        <StatBadge label="Jugadores" value={playerData.length} />
         <StatBadge label="Goles totales" value={totalGoals} />
         <StatBadge label="Partidos jugados" value={finished} />
       </section>

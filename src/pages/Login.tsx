@@ -10,10 +10,10 @@ export default function Login() {
   const [password, setPassword] = useState("")
   const [error, setError] = useState("")
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
     setError("")
-    const result = login(email, password)
+    const result = await login(email, password)
     if (result.success) {
       navigate("/")
     } else {
@@ -65,12 +65,17 @@ export default function Login() {
           </button>
         </form>
 
-        <p className="mt-4 text-center text-sm text-muted-foreground">
-          ¿No tienes cuenta?{" "}
-          <Link to="/registro" className="font-medium text-primary hover:underline">
-            Regístrate
+        <div className="mt-4 flex flex-col gap-2 text-center text-sm text-muted-foreground">
+          <Link to="/reset-password" className="font-medium text-primary hover:underline">
+            Olvidé mi contraseña
           </Link>
-        </p>
+          <p>
+            ¿No tienes cuenta?{" "}
+            <Link to="/registro" className="font-medium text-primary hover:underline">
+              Regístrate
+            </Link>
+          </p>
+        </div>
       </div>
     </div>
   )

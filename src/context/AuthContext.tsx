@@ -1,91 +1,94 @@
 import { createContext, useContext, useState, useEffect, type ReactNode } from "react"
+import { apiFetch, getStoredToken, setStoredToken, clearStoredToken, parseJwtToken, type AuthUser } from "../lib/api"
 
-type User = {
-  name: string
-  email: string
-  role: "usuario" | "administrador"
-}
+type AuthResult = { success: boolean; error?: string }
 
 type AuthContextType = {
-  user: User | null
-  login: (email: string, password: string) => { success: boolean; error?: string }
-  register: (name: string, email: string, password: string) => { success: boolean; error?: string }
-  logout: () => void
+  user: AuthUser | null
+  isLoading: boolean
+  login: (email: string, password: string) => Promise<AuthResult>
+  register: (name: string, email: string, password: string) => Promise<AuthResult>
+  logout: () => Promise<void>
+  sendVerificationEmail: () => Promise<AuthResult>
+  resetPassword: (email: string) => Promise<AuthResult>
 }
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined)
-const STORAGE_KEY = "mundial_users"
-const SESSION_KEY = "mundial_session"
-
-function getStoredUsers(): User[] {
-  try {
-    const data = localStorage.getItem(STORAGE_KEY)
-    return data ? JSON.parse(data) : []
-  } catch {
-    return []
-  }
-}
-
-function saveUsers(users: User[]): void {
-  localStorage.setItem(STORAGE_KEY, JSON.stringify(users))
-}
 
 export function AuthProvider({ children }: { children: ReactNode }) {
-  const [user, setUser] = useState<User | null>(null)
+  const [user, setUser] = useState<AuthUser | null>(null)
   const [isLoading, setIsLoading] = useState(true)
 
+  // Validar sesión inicial al cargar la app usando el Token JWT almacenado
   useEffect(() => {
-    try {
-      const saved = localStorage.getItem(SESSION_KEY)
-      if (saved) {
-        setUser(JSON.parse(saved))
+    async function checkAuth() {
+      const token = getStoredToken()
+      if (!token) {
+        setIsLoading(false)
+        return
       }
-    } catch {
-      localStorage.removeItem(SESSION_KEY)
-    } finally {
-      setIsLoading(false)
-    }
-  }, [])
 
-  useEffect(() => {
-    if (user) {
-      localStorage.setItem(SESSION_KEY, JSON.stringify(user))
+      // Decodificación inicial local rápida para no mostrar parpadeos en la UI
+      const localUser = parseJwtToken<AuthUser>(token)
+      if (localUser) {
+        setUser(localUser)
+      }
+
+      try {
+        // Validar el token contra el endpoint backend /api/auth/me
+        const res = await apiFetch<{ user: AuthUser }>("/api/auth/me")
+        if (res?.user) {
+          setUser(res.user)
+        } else {
+          clearStoredToken()
+          setUser(null)
+        }
+      } catch (err) {
+        console.error("Error al verificar la autenticación:", err)
+        // Si el token expiró o es inválido, limpiamos la sesión
+        clearStoredToken()
+        setUser(null)
+      } finally {
+        setIsLoading(false)
+      }
     }
-  }, [user])
+
+    checkAuth()
+  }, [])
 
   const validateEmail = (email: string): boolean => {
     const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/
     return emailRegex.test(email)
   }
 
-  const login = (email: string, password: string) => {
+  const login = async (email: string, password: string): Promise<AuthResult> => {
     const trimmedEmail = email.trim()
     const trimmedPassword = password.trim()
 
     if (!trimmedEmail || !trimmedPassword) {
       return { success: false, error: "Email y contraseña son requeridos." }
     }
+    if (!validateEmail(trimmedEmail)) return { success: false, error: "Email no válido." }
 
-    if (!validateEmail(trimmedEmail)) {
-      return { success: false, error: "Email no válido." }
+    try {
+      // Petición POST a tu endpoint de Node + MongoDB
+      const data = await apiFetch<{ token: string; user: AuthUser }>("/api/auth/login", {
+        method: "POST",
+        body: JSON.stringify({ email: trimmedEmail, password: trimmedPassword }),
+      })
+
+      if (data?.token && data?.user) {
+        setStoredToken(data.token)
+        setUser(data.user)
+        return { success: true }
+      }
+      return { success: false, error: "Respuesta de servidor inválida." }
+    } catch (err: any) {
+      return { success: false, error: err.message || "Error al iniciar sesión." }
     }
-
-    if (trimmedPassword.length < 6) {
-      return { success: false, error: "Contraseña debe tener al menos 6 caracteres." }
-    }
-
-    const users = getStoredUsers()
-    const foundUser = users.find((u) => u.email === trimmedEmail)
-
-    if (!foundUser) {
-      return { success: false, error: "Usuario no registrado." }
-    }
-
-    setUser(foundUser)
-    return { success: true }
   }
 
-  const register = (name: string, email: string, password: string) => {
+  const register = async (name: string, email: string, password: string): Promise<AuthResult> => {
     const trimmedName = name.trim()
     const trimmedEmail = email.trim()
     const trimmedPassword = password.trim()
@@ -93,34 +96,49 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     if (!trimmedName || !trimmedEmail || !trimmedPassword) {
       return { success: false, error: "Todos los campos son requeridos." }
     }
+    if (!validateEmail(trimmedEmail)) return { success: false, error: "Email no válido." }
+    if (trimmedPassword.length < 6) return { success: false, error: "La contraseña debe tener al menos 6 caracteres." }
 
-    if (!validateEmail(trimmedEmail)) {
-      return { success: false, error: "Email no válido." }
+    try {
+      // Petición POST a tu endpoint de registro con MongoDB
+      const data = await apiFetch<{ token: string; user: AuthUser }>("/api/auth/register", {
+        method: "POST",
+        body: JSON.stringify({ name: trimmedName, email: trimmedEmail, password: trimmedPassword }),
+      })
+
+      if (data?.token && data?.user) {
+        setStoredToken(data.token)
+        setUser(data.user)
+        return { success: true }
+      }
+      return { success: false, error: "Error al procesar el registro." }
+    } catch (err: any) {
+      return { success: false, error: err.message || "Error al registrar el usuario." }
     }
-
-    if (trimmedPassword.length < 6) {
-      return { success: false, error: "Contraseña debe tener al menos 6 caracteres." }
-    }
-
-    const users = getStoredUsers()
-    if (users.some((u) => u.email === trimmedEmail)) {
-      return { success: false, error: "Este email ya está registrado." }
-    }
-
-    const newUser: User = {
-      name: trimmedName,
-      email: trimmedEmail,
-      role: trimmedEmail.toLowerCase().startsWith("admin") ? "administrador" : "usuario",
-    }
-
-    saveUsers([...users, newUser])
-    setUser(newUser)
-    return { success: true }
   }
 
-  const logout = () => {
+  const logout = async () => {
+    clearStoredToken()
     setUser(null)
-    localStorage.removeItem(SESSION_KEY)
+  }
+
+  // Métodos marcados como legacy (Opcionales con MongoDB, configurables según requieras)
+  const sendVerificationEmail = async (): Promise<AuthResult> => {
+    return { success: false, error: "Verificación de email no disponible temporalmente en este método." }
+  }
+
+  const resetPassword = async (email: string): Promise<AuthResult> => {
+    const trimmedEmail = email.trim()
+    if (!trimmedEmail) return { success: false, error: "El correo es requerido." }
+    try {
+      await apiFetch("/api/auth/reset-password", {
+        method: "POST",
+        body: JSON.stringify({ email: trimmedEmail }),
+      })
+      return { success: true }
+    } catch (err: any) {
+      return { success: false, error: err.message || "Error al solicitar restablecimiento." }
+    }
   }
 
   if (isLoading) {
@@ -128,7 +146,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   }
 
   return (
-    <AuthContext.Provider value={{ user, login, register, logout }}>
+    <AuthContext.Provider value={{ user, isLoading, login, register, logout, sendVerificationEmail, resetPassword }}>
       {children}
     </AuthContext.Provider>
   )

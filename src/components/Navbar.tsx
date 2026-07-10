@@ -2,17 +2,18 @@ import { NavLink, useNavigate } from "react-router-dom"
 import { Trophy, LogOut } from "lucide-react"
 import { useAuth } from "../context/AuthContext"
 
-const links = [
-  { to: "/", label: "Inicio" },
-  { to: "/equipos", label: "Equipos" },
-  { to: "/jugadores", label: "Jugadores" },
-  { to: "/predicciones", label: "Predicciones" },
-  { to: "/admin", label: "Administración" },
-]
-
 export default function Navbar() {
   const { user, logout } = useAuth()
   const navigate = useNavigate()
+  const isAdmin = user?.role === "administrador"
+
+  const links = [
+    { to: "/", label: "Inicio" },
+    { to: "/equipos", label: "Equipos" },
+    { to: "/jugadores", label: "Jugadores" },
+    { to: "/predicciones", label: "Predicciones" },
+    ...(isAdmin ? [{ to: "/admin", label: "Administración" }] : []),
+  ]
 
   const handleLogout = () => {
     logout()

@@ -4,15 +4,23 @@ import Navbar from "./components/Navbar"
 import Home from "./pages/Home"
 import Login from "./pages/Login"
 import Register from "./pages/Register"
+import ResetPassword from "./pages/ResetPassword"
 import Teams from "./pages/Teams"
 import Players from "./pages/Players"
 import Predictions from "./pages/Predictions"
 import Admin from "./pages/Admin"
 import type { ReactNode } from "react"
 
-function Protected({ children }: { children: ReactNode }) {
-  const { user } = useAuth()
+function Protected({ children, adminOnly = false }: { children: ReactNode; adminOnly?: boolean }) {
+  const { user, isLoading } = useAuth()
+
+  if (isLoading) {
+    return <div className="py-10 text-center text-sm text-muted-foreground">Cargando sesión...</div>
+  }
+
   if (!user) return <Navigate to="/login" replace />
+  if (adminOnly && user.role !== "administrador") return <Navigate to="/" replace />
+
   return <>{children}</>
 }
 
@@ -25,6 +33,7 @@ export default function App() {
           <Route path="/" element={<Home />} />
           <Route path="/login" element={<Login />} />
           <Route path="/registro" element={<Register />} />
+          <Route path="/reset-password" element={<ResetPassword />} />
           <Route path="/equipos" element={<Teams />} />
           <Route path="/jugadores" element={<Players />} />
           <Route
@@ -38,7 +47,7 @@ export default function App() {
           <Route
             path="/admin"
             element={
-              <Protected>
+              <Protected adminOnly>
                 <Admin />
               </Protected>
             }

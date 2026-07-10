@@ -1,8 +1,29 @@
-import { useState } from "react"
-import { teams } from "../data/mundial"
+import { useEffect, useState } from "react"
+import type { Team } from "../data/mundial"
 
 export default function Teams() {
   const [query, setQuery] = useState("")
+  const [teams, setTeams] = useState<Team[]>([])
+  const [loading, setLoading] = useState(true)
+  const [error, setError] = useState("")
+
+  useEffect(() => {
+    const loadTeams = async () => {
+      try {
+        const response = await fetch("http://localhost:3001/api/teams")
+        if (!response.ok) throw new Error("No se pudo cargar el listado de equipos")
+        const data = (await response.json()) as Team[]
+        setTeams(data)
+      } catch (err) {
+        setError(err instanceof Error ? err.message : "Error desconocido")
+      } finally {
+        setLoading(false)
+      }
+    }
+
+    void loadTeams()
+  }, [])
+
   const sorted = [...teams].sort((a, b) => b.points - a.points)
   const filtered = sorted.filter((t) => t.name.toLowerCase().includes(query.toLowerCase()))
 
@@ -21,7 +42,15 @@ export default function Teams() {
         />
       </div>
 
-      {filtered.length === 0 ? (
+      {loading ? (
+        <div className="rounded-lg border border-muted bg-muted/50 p-8 text-center text-muted-foreground">
+          Cargando datos desde la API propia...
+        </div>
+      ) : error ? (
+        <div className="rounded-lg border border-destructive/30 bg-destructive/10 p-4 text-sm text-destructive">
+          {error}
+        </div>
+      ) : filtered.length === 0 ? (
         <div className="rounded-lg border border-muted bg-muted/50 p-8 text-center text-muted-foreground">
           No se encontraron equipos.
         </div>

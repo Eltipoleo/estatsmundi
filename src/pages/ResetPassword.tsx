@@ -1,24 +1,25 @@
 import { useState } from "react"
 import { useNavigate, Link } from "react-router-dom"
-import { UserPlus } from "lucide-react"
+import { Mail } from "lucide-react"
 import { useAuth } from "../context/AuthContext"
 
-export default function Register() {
-  const { register } = useAuth()
+export default function ResetPassword() {
+  const { resetPassword } = useAuth()
   const navigate = useNavigate()
-  const [name, setName] = useState("")
   const [email, setEmail] = useState("")
-  const [password, setPassword] = useState("")
+  const [message, setMessage] = useState("")
   const [error, setError] = useState("")
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
     setError("")
-    const result = await register(name, email, password)
+    setMessage("")
+    const result = await resetPassword(email)
     if (result.success) {
-      navigate("/")
+      setMessage("Se envió un correo para restablecer la contraseña.")
+      setTimeout(() => navigate("/login"), 3000)
     } else {
-      setError(result.error || "Error al registrarse.")
+      setError(result.error || "Error al enviar el correo de restablecimiento.")
     }
   }
 
@@ -27,25 +28,15 @@ export default function Register() {
       <div className="rounded-xl border bg-card p-6">
         <div className="mb-6 flex items-center gap-3">
           <span className="rounded-lg bg-primary p-2 text-primary-foreground">
-            <UserPlus size={20} />
+            <Mail size={20} />
           </span>
           <div>
-            <h1 className="text-xl font-bold">Crear cuenta</h1>
-            <p className="text-sm text-muted-foreground">Regístrate para usar el sistema.</p>
+            <h1 className="text-xl font-bold">Restablecer contraseña</h1>
+            <p className="text-sm text-muted-foreground">Recibe un enlace en tu correo para cambiar tu contraseña.</p>
           </div>
         </div>
 
         <form onSubmit={handleSubmit} className="flex flex-col gap-4">
-          <div>
-            <label className="mb-1 block text-sm font-medium">Nombre</label>
-            <input
-              value={name}
-              onChange={(e) => setName(e.target.value)}
-              placeholder="Tu nombre"
-              className="w-full rounded-lg border bg-background px-3 py-2 outline-none focus:border-primary"
-              required
-            />
-          </div>
           <div>
             <label className="mb-1 block text-sm font-medium">Correo electrónico</label>
             <input
@@ -56,29 +47,16 @@ export default function Register() {
               className="w-full rounded-lg border bg-background px-3 py-2 outline-none focus:border-primary"
               required
             />
-            <p className="mt-1 text-xs text-muted-foreground">Usa email que empiece con "admin" para rol administrador.</p>
-          </div>
-          <div>
-            <label className="mb-1 block text-sm font-medium">Contraseña</label>
-            <input
-              type="password"
-              value={password}
-              onChange={(e) => setPassword(e.target.value)}
-              placeholder="••••••••"
-              minLength={6}
-              className="w-full rounded-lg border bg-background px-3 py-2 outline-none focus:border-primary"
-              required
-            />
-            <p className="mt-1 text-xs text-muted-foreground">Mínimo 6 caracteres.</p>
           </div>
           {error && <p className="text-sm text-destructive">{error}</p>}
+          {message && <p className="text-sm text-success">{message}</p>}
           <button type="submit" className="rounded-lg bg-primary px-4 py-2 font-medium text-primary-foreground hover:opacity-90">
-            Registrarme
+            Enviar enlace
           </button>
         </form>
 
         <p className="mt-4 text-center text-sm text-muted-foreground">
-          ¿Ya tienes cuenta?{" "}
+          ¿Ya recuerdas tu contraseña?{" "}
           <Link to="/login" className="font-medium text-primary hover:underline">
             Inicia sesión
           </Link>
