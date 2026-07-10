@@ -3,8 +3,7 @@ import { Link } from "react-router-dom"
 import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, PieChart, Pie, Cell, Legend } from "recharts"
 import { Trophy, Users, Goal, TrendingUp } from "lucide-react"
 import { Card, CardHeader, StatBadge } from "../components/Card"
-import { db } from "../firebase"
-import { collection, onSnapshot } from "firebase/firestore"
+import { apiFetch } from "../lib/api"
 import { teams as fallbackTeams, players as fallbackPlayers, matches as fallbackMatches, type Team, type Player, type Match } from "../data/mundial"
 import ApiStatus from "./ApiStatus"
 
@@ -16,26 +15,31 @@ export default function Home() {
   const [matchData, setMatchData] = useState<Match[]>(fallbackMatches)
 
   useEffect(() => {
-    const unsubTeams = onSnapshot(collection(db, "teams"), (snap) => {
-      const next = snap.docs.map((docSnap) => ({ ...(docSnap.data() as Team), id: Number(docSnap.id) }))
-      if (next.length > 0) setTeamData(next)
-    })
+    async function loadHomeData() {
+      try {
+        // Consultas directas a tu API propia de MongoDB
+        const teams = await apiFetch<Team[]>("/api/teams")
+        if (Array.isArray(teams) && teams.length > 0) setTeamData(teams)
+      } catch (err) {
+        console.error("Error al cargar equipos de MongoDB:", err)
+      }
 
-    const unsubPlayers = onSnapshot(collection(db, "players"), (snap) => {
-      const next = snap.docs.map((docSnap) => ({ ...(docSnap.data() as Player), id: Number(docSnap.id) }))
-      if (next.length > 0) setPlayerData(next)
-    })
+      try {
+        const players = await apiFetch<Player[]>("/api/players")
+        if (Array.isArray(players) && players.length > 0) setPlayerData(players)
+      } catch (err) {
+        console.error("Error al cargar jugadores de MongoDB:", err)
+      }
 
-    const unsubMatches = onSnapshot(collection(db, "matches"), (snap) => {
-      const next = snap.docs.map((docSnap) => ({ ...(docSnap.data() as Match), id: Number(docSnap.id) }))
-      if (next.length > 0) setMatchData(next)
-    })
-
-    return () => {
-      unsubTeams()
-      unsubPlayers()
-      unsubMatches()
+      try {
+        const matches = await apiFetch<Match[]>("/api/matches")
+        if (Array.isArray(matches) && matches.length > 0) setMatchData(matches)
+      } catch (err) {
+        console.error("Error al cargar partidos de MongoDB:", err)
+      }
     }
+
+    void loadHomeData()
   }, [])
 
   const topScorers = [...playerData].sort((a, b) => b.goals - a.goals).slice(0, 5)
