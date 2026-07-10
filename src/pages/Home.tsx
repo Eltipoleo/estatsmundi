@@ -1,6 +1,5 @@
 import { useEffect, useState } from 'react';
 
-// Declaración estricta de interfaces para evitar advertencias de TypeScript
 interface Team {
   _id: string;
   name: string;
@@ -19,31 +18,36 @@ export default function Home() {
   const [players, setPlayers] = useState<Player[]>([]);
   const [loading, setLoading] = useState(true);
 
-  // URL base de tu backend en Render
   const API_URL = 'https://estatsmundi.onrender.com/api';
 
   useEffect(() => {
     const fetchDashboardData = async () => {
       try {
-        // 1. Obtener lista de equipos
+        // 1. Obtener lista de equipos con validación estricta
         const teamsRes = await fetch(`${API_URL}/teams`);
         const teamsData = await teamsRes.json();
-        if (Array.isArray(teamsData)) {
-          // Ordenar por puntos de forma descendente (Mayor a Menor)
-          const sortedTeams = teamsData.sort((a: Team, b: Team) => b.points - a.points);
+        
+        if (teamsData && Array.isArray(teamsData)) {
+          const sortedTeams = [...teamsData].sort((a, b) => (b.points || 0) - (a.points || 0));
           setTeams(sortedTeams);
+        } else {
+          setTeams([]);
         }
 
-        // 2. Obtener lista de jugadores goleadores
+        // 2. Obtener lista de jugadores goleadores con validación estricta
         const playersRes = await fetch(`${API_URL}/players`);
         const playersData = await playersRes.json();
-        if (Array.isArray(playersData)) {
-          // Ordenar por número de goles de forma descendente (Mayor a Menor)
-          const sortedPlayers = playersData.sort((a: Player, b: Player) => b.goals - a.goals);
+        
+        if (playersData && Array.isArray(playersData)) {
+          const sortedPlayers = [...playersData].sort((a, b) => (b.goals || 0) - (a.goals || 0));
           setPlayers(sortedPlayers);
+        } else {
+          setPlayers([]);
         }
       } catch (err) {
         console.error('Error al sincronizar datos del Home:', err);
+        setTeams([]);
+        setPlayers([]);
       } finally {
         setLoading(false);
       }
@@ -51,6 +55,11 @@ export default function Home() {
 
     fetchDashboardData();
   }, []);
+
+  // Cálculo seguro del total de goles
+  const totalGoals = Array.isArray(players) 
+    ? players.reduce((acc, curr) => acc + (Number(curr.goals) || 0), 0) 
+    : 0;
 
   return (
     <div style={{ maxWidth: '1100px', margin: '0 auto', padding: '25px', fontFamily: 'sans-serif', color: '#1e293b' }}>
@@ -66,14 +75,12 @@ export default function Home() {
           <div style={{ fontSize: '12px', color: '#64748b', fontWeight: '500', marginTop: '4px' }}>Goleadores Registrados</div>
         </div>
         <div style={{ background: '#fff', border: '1px solid #e2e8f0', borderRadius: '10px', padding: '15px', textAlign: 'center', boxShadow: '0 1px 2px 0 rgb(0 0 0 / 0.05)' }}>
-          <div style={{ fontSize: '24px', fontWeight: 'bold', color: '#0b6e4f' }}>
-            {loading ? '...' : players.reduce((acc, curr) => acc + curr.goals, 0)}
-          </div>
+          <div style={{ fontSize: '24px', fontWeight: 'bold', color: '#0b6e4f' }}>{loading ? '...' : totalGoals}</div>
           <div style={{ fontSize: '12px', color: '#64748b', fontWeight: '500', marginTop: '4px' }}>Goles Totales</div>
         </div>
         <div style={{ background: '#fff', border: '1px solid #e2e8f0', borderRadius: '10px', padding: '15px', textAlign: 'center', boxShadow: '0 1px 2px 0 rgb(0 0 0 / 0.05)' }}>
           <div style={{ fontSize: '24px', fontWeight: 'bold', color: '#0b6e4f' }}>En Línea</div>
-          <div style={{ fontSize: '12px', color: '#0b6e4f', fontWeight: 'bold', marginTop: '4px' }}>● MongoDB Conectado</div>
+          <div style={{ fontSize: '12px', color: '#0b6e4f', fontWeight: 'bold', marginTop: '4px' }}>● Base de Datos</div>
         </div>
       </div>
 
@@ -87,7 +94,7 @@ export default function Home() {
           </h3>
           {loading ? (
             <p style={{ color: '#64748b', fontSize: '14px' }}>Cargando estadísticas de jugadores...</p>
-          ) : players.length === 0 ? (
+          ) : !players || players.length === 0 ? (
             <p style={{ color: '#64748b', fontSize: '14px' }}>No hay goleadores guardados en la base de datos por el administrador.</p>
           ) : (
             <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '14px', textAlign: 'left' }}>
@@ -118,7 +125,7 @@ export default function Home() {
           </h3>
           {loading ? (
             <p style={{ color: '#64748b', fontSize: '14px' }}>Cargando posiciones del torneo...</p>
-          ) : teams.length === 0 ? (
+          ) : !teams || teams.length === 0 ? (
             <p style={{ color: '#64748b', fontSize: '14px' }}>No hay puntuaciones registradas en este momento.</p>
           ) : (
             <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '14px', textAlign: 'left' }}>
