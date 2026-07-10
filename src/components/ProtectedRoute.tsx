@@ -9,15 +9,16 @@ export default function ProtectedRoute() {
   if (token && userRaw) {
     try {
       const user = JSON.parse(userRaw);
-      // Validamos estrictamente que el rol sea administrador
-      if (user.role === 'administrador' || user.role === 'admin') {
+      // Validamos de forma segura que exista el rol
+      if (user && (user.role === 'administrador' || user.role === 'admin')) {
         isAdmin = true;
       }
     } catch (e) {
-      console.error("Error al verificar el rol en el guardián de rutas:", e);
+      console.error("⚠️ Error al parsear el usuario en ProtectedRoute, limpiando residuo:", e);
+      // Si el JSON estaba corrupto, limpiamos el localStorage para evitar bucles de pantalla en blanco
+      localStorage.removeItem('user');
     }
   }
 
-  // 🛡️ Si es admin, lo dejamos pasar al componente (Outlet), si no, lo mandamos al login
   return isAdmin ? <Outlet /> : <Navigate to="/login" replace />;
 }

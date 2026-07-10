@@ -2,71 +2,104 @@ import { Link } from "react-router-dom";
 import { Trophy, LogOut, ShieldAlert } from "lucide-react";
 
 export default function Navbar() {
-  // Leemos directo del LocalStorage para reaccionar al instante
   const token = localStorage.getItem("token");
   const userRaw = localStorage.getItem("user");
   
-  let user = null;
+  let user: any = null;
+  
   if (userRaw) {
     try {
       user = JSON.parse(userRaw);
     } catch (e) {
-      console.error("Error parsing user data:", e);
+      console.error("⚠️ Error parsing user data in Navbar:", e);
+      // Evitamos que rompa el renderizado dejando el usuario como null
+      user = null;
     }
   }
 
   const handleLogout = () => {
     localStorage.clear();
-    window.location.href = "/"; // Fuerza una limpieza total y manda al Home
+    window.location.href = "/";
   };
 
   return (
-    <header className="border-b bg-card sticky top-0 z-50">
-      <div className="mx-auto flex h-16 max-w-6xl items-center justify-between px-4">
+    <header style={{ borderBottom: '1px solid #e2e8f0', backgroundColor: '#fff', sticky: 'top', zIndex: 50 }}>
+      <div style={{ margin: '0 auto', display: 'flex', h: '64px', height: '64px', maxWidth: '1100px', alignItems: 'center', justifyContent: 'between', justifyContent: 'space-between', padding: '0 16px' }}>
+        
         {/* LOGO */}
-        <Link to="/" className="flex items-center gap-2 font-bold text-lg text-primary">
-          <Trophy className="h-5 w-5 text-emerald-600" />
+        <Link to="/" style={{ display: 'flex', alignItems: 'center', gap: '8px', fontWeight: 'bold', fontSize: '18px', textDecoration: 'none', color: '#0b6e4f' }}>
+          <Trophy style={{ height: '20px', width: '20px', color: '#059669' }} />
           <span>Mundial Stats</span>
         </Link>
 
-        {/* MENÚ DE NAVEGACIÓN */}
-        <nav className="flex items-center gap-6 text-sm font-medium">
-          <Link to="/" className="hover:text-primary transition-colors">Inicio</Link>
-          <Link to="/equipos" className="hover:text-primary transition-colors">Equipos</Link>
-          <Link to="/jugadores" className="hover:text-primary transition-colors">Jugadores</Link>
-          <Link to="/predicciones" className="hover:text-primary transition-colors">Predicciones</Link>
+        {/* NAVEGACIÓN */}
+        <nav style={{ display: 'flex', alignItems: 'center', gap: '24px', fontSize: '14px', fontWeight: 500 }}>
+          <Link to="/" style={{ textDecoration: 'none', color: '#1e293b' }}>Inicio</Link>
+          <Link to="/equipos" style={{ textDecoration: 'none', color: '#1e293b' }}>Equipos</Link>
+          <Link to="/jugadores" style={{ textDecoration: 'none', color: '#1e293b' }}>Jugadores</Link>
+          <Link to="/predicciones" style={{ textDecoration: 'none', color: '#1e293b' }}>Predicciones</Link>
 
-          {/* ✅ SI ES ADMINISTRADOR, MUESTRA LA PESTAÑA */}
+          {/* MENÚ DE ADMINISTRACIÓN */}
           {user && (user.role === "administrador" || user.role === "admin") && (
             <Link 
               to="/admin" 
-              className="flex items-center gap-1 text-amber-600 bg-amber-50 dark:bg-amber-950/30 px-2.5 py-1 rounded-md hover:opacity-90 transition-opacity"
+              style={{ 
+                display: 'flex', 
+                alignItems: 'center', 
+                gap: '4px', 
+                color: '#b45309', 
+                backgroundColor: '#fef3c7', 
+                padding: '4px 10px', 
+                borderRadius: '6px', 
+                textDecoration: 'none',
+                fontWeight: 'bold'
+              }}
             >
-              <ShieldAlert className="h-4 w-4" />
+              <ShieldAlert style={{ height: '16px', width: '16px' }} />
               <span>Administración</span>
             </Link>
           )}
         </nav>
 
-        {/* SECCIÓN DE BOTONES DE ACCESO */}
-        <div className="flex items-center gap-4">
+        {/* AUTENTICACIÓN */}
+        <div style={{ display: 'flex', alignItems: 'center', gap: '16px' }}>
           {token ? (
-            <div className="flex items-center gap-3">
-              <span className="text-xs text-muted-foreground bg-muted px-2 py-1 rounded">
+            <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
+              <span style={{ fontSize: '12px', color: '#64748b', backgroundColor: '#f1f5f9', padding: '4px 8px', borderRadius: '4px' }}>
                 Hola, <strong>{user?.name || "Usuario"}</strong>
               </span>
               <button
                 onClick={handleLogout}
-                className="flex items-center gap-1.5 rounded-lg border px-3 py-1.5 text-sm font-medium text-destructive hover:bg-destructive/10 transition-colors"
+                style={{ 
+                  display: 'flex', 
+                  alignItems: 'center', 
+                  gap: '6px', 
+                  borderRadius: '8px', 
+                  border: '1px solid #cbd5e1', 
+                  padding: '6px 12px', 
+                  fontSize: '14px', 
+                  fontWeight: 500, 
+                  color: '#dc2626', 
+                  backgroundColor: '#fff', 
+                  cursor: 'pointer' 
+                }}
               >
-                <LogOut className="h-4 w-4" />
+                <LogOut style={{ height: '16px', width: '16px' }} />
                 <span>Cerrar sesión</span>
               </button>
             </div>
           ) : (
             <Link
               to="/login"
-              className="rounded-lg bg-emerald-700 px-4 py-1.5 text-sm font-medium text-white hover:bg-emerald-600 transition-colors"
+              style={{ 
+                borderRadius: '8px', 
+                backgroundColor: '#0b6e4f', 
+                padding: '8px 16px', 
+                fontSize: '14px', 
+                fontWeight: 500, 
+                color: '#fff', 
+                textDecoration: 'none' 
+              }}
             >
               Iniciar sesión
             </Link>
