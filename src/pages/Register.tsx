@@ -5,6 +5,7 @@ export default function Register() {
   const [correo, setCorreo] = useState('');
   const [contrasena, setContrasena] = useState('');
   const [message, setMessage] = useState('');
+  const [generatedToken, setGeneratedToken] = useState('');
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
 
@@ -14,6 +15,7 @@ export default function Register() {
     e.preventDefault();
     setError('');
     setMessage('');
+    setGeneratedToken('');
     setLoading(true);
 
     try {
@@ -21,9 +23,9 @@ export default function Register() {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          name: nombre.trim(),           // Asegura match con Node.js
-          email: correo.trim().toLowerCase(), // Asegura match con Node.js
-          password: contrasena.trim(),   // Asegura match con Node.js
+          name: nombre.trim(),
+          email: correo.trim().toLowerCase(),
+          password: contrasena.trim(),
         }),
       });
 
@@ -33,7 +35,10 @@ export default function Register() {
         throw new Error(data.error || 'No se pudo completar el registro.');
       }
 
-      setMessage(data.message || '🏆 ¡Registro completado! Por favor, revisa tu correo electrónico para activar tu cuenta.');
+      setMessage(data.message);
+      if (data.token) {
+        setGeneratedToken(data.token);
+      }
       setNombre('');
       setCorreo('');
       setContrasena('');
@@ -55,6 +60,14 @@ export default function Register() {
         </div>
 
         {message && <div style={{ backgroundColor: '#f0fdf4', border: '1px solid #bbf7d0', color: '#166534', padding: '12px', borderRadius: '6px', fontSize: '14px', marginBottom: '15px' }}>{message}</div>}
+        
+        {generatedToken && (
+          <div style={{ marginBottom: '15px', padding: '10px', background: '#f8fafc', border: '1px solid #cbd5e1', borderRadius: '6px' }}>
+            <span style={{ fontSize: '12px', fontWeight: 'bold', color: '#334155' }}>🔑 Tu Token JWT de Activación:</span>
+            <div style={{ wordBreak: 'break-all', fontFamily: 'monospace', fontSize: '11px', marginTop: '5px', color: '#0f172a', fontWeight: 'bold' }}>{generatedToken}</div>
+          </div>
+        )}
+
         {error && <div style={{ backgroundColor: '#fef2f2', border: '1px solid #fca5a5', color: '#b91c1c', padding: '11px', borderRadius: '6px', fontSize: '14px', marginBottom: '15px' }}>{error}</div>}
 
         <form onSubmit={handleRegister} style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
@@ -74,6 +87,12 @@ export default function Register() {
             {loading ? 'Registrando...' : 'Registrar Cuenta'}
           </button>
         </form>
+
+        <div style={{ marginTop: '20px', textAlign: 'center', borderTop: '1px solid #f1f5f9', paddingTop: '15px' }}>
+          <button onClick={() => window.location.href = '/login'} style={{ background: 'none', border: 'none', color: '#0b6e4f', fontWeight: 'bold', cursor: 'pointer', fontSize: '14px' }}>
+            ¿Ya tienes cuenta? Inicia sesión aquí
+          </button>
+        </div>
       </div>
     </div>
   );
