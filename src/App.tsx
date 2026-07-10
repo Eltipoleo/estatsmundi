@@ -19,7 +19,11 @@ function Protected({ children, adminOnly = false }: { children: ReactNode; admin
   }
 
   if (!user) return <Navigate to="/login" replace />
-  if (adminOnly && user.role !== "administrador") return <Navigate to="/" replace />
+  
+  // Usamos un casteo rápido a string para que TypeScript no se queje por los tipos literales
+  if (adminOnly && (user.role as string) !== "administrador" && (user.role as string) !== "admin") {
+    return <Navigate to="/" replace />
+  }
 
   return <>{children}</>
 }
@@ -30,12 +34,15 @@ export default function App() {
       <Navbar />
       <main className="mx-auto max-w-6xl px-4 py-6">
         <Routes>
+          {/* RUTAS PRINCIPALES Y DE AUTENTICACIÓN LIBRES */}
           <Route path="/" element={<Home />} />
           <Route path="/login" element={<Login />} />
-          <Route path="/registro" element={<Register />} />
+          <Route path="/register" element={<Register />} /> {/* 👈 Corregido a /register para que coincida con tus redirecciones */}
           <Route path="/reset-password" element={<ResetPassword />} />
           <Route path="/equipos" element={<Teams />} />
           <Route path="/jugadores" element={<Players />} />
+          
+          {/* RUTAS PROTEGIDAS */}
           <Route
             path="/predicciones"
             element={
