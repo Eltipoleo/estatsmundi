@@ -1,7 +1,6 @@
 import { useEffect, useState } from "react"
-import { collection, doc, getDoc, onSnapshot, setDoc } from "firebase/firestore"
-import { db } from "../firebase"
 import { useAuth } from "../context/AuthContext"
+import { apiFetch } from "../lib/api"
 import type { Match } from "../data/mundial"
 
 type PredictionValue = { homeScore: number; awayScore: number }
@@ -13,35 +12,51 @@ export default function Predictions() {
   const [saving, setSaving] = useState<Record<number, boolean>>({})
   const [message, setMessage] = useState("")
 
+  // Cargar los partidos programados desde tu API de MongoDB
   useEffect(() => {
-    const unsub = onSnapshot(collection(db, "matches"), (snap) => {
-      const nextMatches = snap.docs
-        .map((docSnap) => ({ ...(docSnap.data() as Match), id: Number(docSnap.id) }))
-        .filter((match) => match.status === "Programado")
-        .sort((a, b) => a.date.localeCompare(b.date))
-      setMatches(nextMatches)
-    })
-    return () => unsub()
+    async function fetchMatches() {
+      try {
+        const data = await apiFetch<Match[]>("/api/matches")
+        if (Array.isArray(data)) {
+          const scheduled = data
+            .filter((match) => match.status === "Programado")
+            .sort((a, b) => a.date.localeCompare(b.date))
+          setMatches(scheduled)
+        }
+      } catch (err) {
+        console.error("Error al cargar partidos:", err)
+      }
+    }
+    void fetchMatches()
   }, [])
 
+  // Cargar las predicciones previas guardadas por el usuario en MongoDB
   useEffect(() => {
     if (!user) return
 
-    const loadPredictions = async () => {
-      const nextValues: Record<number, PredictionValue> = {}
-      for (const match of matches) {
-        const snap = await getDoc(doc(db, "users", user.uid, "predictions", String(match.id)))
-        if (snap.exists()) {
-          const data = snap.data() as PredictionValue
-          nextValues[match.id] = data
+    async function loadPredictions() {
+      try {
+        // Asumiendo que tu endpoint de predicciones puede retornar las del usuario actual
+        const data = await apiFetch<any[]>("/api/predictions")
+        if (Array.isArray(data)) {
+          const nextValues: Record<number, PredictionValue> = {}
+          data.forEach((pred) => {
+            nextValues[pred.matchId] = {
+              homeScore: pred.homeScore,
+              awayScore: pred.awayScore,
+            }
+          })
+          setValues(nextValues)
         }
+      } catch (err) {
+        console.error("Error al cargar predicciones de MongoDB:", err)
       }
-      setValues(nextValues)
     }
 
     void loadPredictions()
   }, [matches, user])
 
+  // Guardar la predicción en MongoDB a través del endpoint POST
   const handleSave = async (match: Match) => {
     if (!user) return
 
@@ -49,14 +64,24 @@ export default function Predictions() {
     if (current == null) return
 
     setSaving((prev) => ({ ...prev, [match.id]: true }))
-    await setDoc(doc(db, "users", user.uid, "predictions", String(match.id)), {
-      matchId: match.id,
-      homeScore: current.homeScore,
-      awayScore: current.awayScore,
-      updatedAt: new Date().toISOString(),
-    })
-    setMessage(`Tu predicción para ${match.home} vs ${match.away} fue guardada.`)
-    setSaving((prev) => ({ ...prev, [match.id]: false }))
+    
+    try {
+      await apiFetch("/api/predictions", {
+        method: "POST",
+        body: JSON.stringify({
+          userId: user.uid,
+          matchId: match.id,
+          homeScore: current.homeScore,
+          awayScore: current.awayScore,
+        }),
+      })
+      setMessage(`Tu predicción para ${match.home} vs ${match.away} fue guardada.`)
+    } catch (err: any) {
+      console.error(err)
+      setMessage("Error al guardar la predicción.")
+    } finally {
+      setSaving((prev) => ({ ...prev, [match.id]: false }))
+    }
   }
 
   if (!user) {
