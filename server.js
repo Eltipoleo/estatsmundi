@@ -3,7 +3,6 @@ import cors from 'cors';
 import dotenv from 'dotenv';
 import { MongoClient } from 'mongodb';
 import jwt from 'jsonwebtoken';
-import nodemailer from 'nodemailer';
 
 dotenv.config();
 
@@ -13,21 +12,6 @@ const PORT = process.env.PORT || 3001;
 app.use(cors());
 app.use(express.json());
 
-// ✅ CONFIGURACIÓN CONFIGURADA PARA PROTOCOLO SEGURO EN NUBE
-const transporter = nodemailer.createTransport({
-  host: 'smtp.gmail.com',
-  port: 465,
-  secure: true, // Usar cifrado SSL nativo
-  auth: {
-    user: process.env.EMAIL_USER,
-    pass: process.env.EMAIL_PASS
-  },
-  tls: {
-    rejectUnauthorized: false // Evita bloqueos por certificados SSL en la nube
-  }
-});
-
-// Endpoint de verificación de estado
 app.get('/api/health', (req, res) => {
   res.json({ status: 'ok', database: process.env.MONGODB_DB ? 'configured' : 'using default' });
 });
@@ -41,11 +25,7 @@ async function startServer() {
     db = client.db(process.env.MONGODB_DB || 'mundial-stats');
     console.log('✅ Conectado a MongoDB Atlas con éxito');
 
-    // ==========================================
-    // ENDPOINTS DE AUTENTICACIÓN (JWT Y ROLES)
-    // ==========================================
-
-    // 1. Registro seguro (Diferenciando Administrador y Usuario de forma asíncrona)
+    // 1. Registro seguro (Despachando correo por HTTP vía Resend desde Render)
     app.post('/api/auth/register', async (req, res) => {
       try {
         const { name, email, password } = req.body;
@@ -55,7 +35,6 @@ async function startServer() {
           return res.status(400).json({ error: 'El correo ya está registrado' });
         }
 
-        // CONTROL DE ROLES ESTRICTO:
         const role = email.toLowerCase() === 'joserty83@gmail.com' ? 'administrador' : 'usuario';
 
         const newUser = { 
@@ -69,40 +48,39 @@ async function startServer() {
         
         const result = await db.collection('users').insertOne(newUser);
 
-        // Generar Token JWT firmado con el rol correspondiente
         const token = jwt.sign(
           { id: result.insertedId, email: newUser.email, role: newUser.role },
           process.env.JWT_SECRET || 'secret_fallback',
           { expiresIn: '24h' }
         );
 
-        // Diseñar correo electrónico con el Token JWT
-        const mailOptions = {
-          from: `"Mundial Stats 🏆" <${process.env.EMAIL_USER}>`,
-          to: newUser.email,
-          subject: 'Confirmación de Cuenta - Token de Autenticación',
-          html: `
-            <div style="font-family: sans-serif; padding: 25px; border: 1px solid #e2e8f0; border-radius: 12px; max-width: 500px;">
-              <h2 style="color: #0b6e4f; margin-top: 0;">¡Hola, ${name}!</h2>
-              <p>Tu cuenta ha sido creada con éxito en la plataforma del Mundial.</p>
-              <p>Tu perfil se ha asignado con el rol de: <strong style="text-transform: uppercase; color: #0b6e4f;">${role}</strong>.</p>
-              <hr style="border: 0; border-top: 1px solid #e2e8f0; margin: 20px 0;" />
-              <p>Este es tu <strong>Token de Autenticación JWT</strong> seguro para iniciar tus sesiones de forma cifrada:</p>
-              <div style="background: #f8fafc; border: 1px solid #cbd5e1; padding: 12px; word-break: break-all; font-family: monospace; border-radius: 6px; font-size: 11px; color: #334155;">
-                ${token}
+        // 🔥 ENVÍO POR API HTTP: Render deja pasar esto al 100% sin bloquear puertos
+        fetch('https://api.resend.com/emails', {
+          method: 'POST',
+          headers: {
+            'Authorization': `Bearer ${process.env.RESEND_API_KEY}`,
+            'Content-Type': 'application/json'
+          },
+          body: JSON.stringify({
+            from: 'Mundial Stats <onboarding@resend.dev>', // Remitente gratuito de pruebas de Resend
+            to: newUser.email,
+            subject: 'Confirmación de Cuenta - Token de Autenticación',
+            html: `
+              <div style="font-family: sans-serif; padding: 25px; border: 1px solid #e2e8f0; border-radius: 12px; max-width: 500px;">
+                <h2 style="color: #0b6e4f; margin-top: 0;">¡Hola, ${name}!</h2>
+                <p>Tu cuenta ha sido creada con éxito en la plataforma del Mundial.</p>
+                <p>Tu perfil se ha asignado con el rol de: <strong style="text-transform: uppercase; color: #0b6e4f;">${role}</strong>.</p>
+                <hr style="border: 0; border-top: 1px solid #e2e8f0; margin: 20px 0;" />
+                <p>Este es tu <strong>Token de Autenticación JWT</strong> seguro para iniciar tus sesiones:</p>
+                <div style="background: #f8fafc; border: 1px solid #cbd5e1; padding: 12px; word-break: break-all; font-family: monospace; border-radius: 6px; font-size: 11px; color: #334155;">
+                  ${token}
+                </div>
               </div>
-              <p style="font-size: 12px; color: #64748b; margin-top: 15px;">Este token expira automáticamente en 24 horas.</p>
-            </div>
-          `
-        };
+            `
+          })
+        }).then(() => console.log("📧 Correo enviado con éxito desde Render usando Resend"))
+          .catch(err => console.error("❌ Error al enviar por Resend:", err.message));
 
-        // 🔥 BLINDAJE CRÍTICO: Quitamos el 'await' para que se mande en segundo plano.
-        // Si la red de Render bloquea el envío o tarda en responder, NO congelará la pantalla del usuario.
-        transporter.sendMail(mailOptions).catch(emailError => {
-          console.error("⚠️ Alerta en segundo plano: No se pudo enviar el correo:", emailError.message);
-        });
-
-        // Responder con éxito inmediato al frontend
         return res.status(201).json({ success: true, token, user: { name, email: newUser.email, role: newUser.role } });
 
       } catch (err) {
@@ -111,17 +89,15 @@ async function startServer() {
       }
     });
 
-    // 2. Inicio de Sesión leyendo los Roles asignados
+    // 2. Inicio de Sesión
     app.post('/api/auth/login', async (req, res) => {
       try {
         const { email, password } = req.body;
-
         const user = await db.collection('users').findOne({ email: email.toLowerCase() });
         if (!user || user.password !== password) {
           return res.status(400).json({ error: 'Credenciales incorrectas' });
         }
 
-        // Emitir nuevo token JWT con el rol guardado en la base de datos
         const token = jwt.sign(
           { id: user._id, email: user.email, role: user.role },
           process.env.JWT_SECRET || 'secret_fallback',
@@ -134,12 +110,10 @@ async function startServer() {
           user: { name: user.name, email: user.email, role: user.role } 
         });
       } catch (err) {
-        console.error("❌ Error en el servidor al loguear:", err);
         return res.status(500).json({ error: 'Error interno en el servidor de autenticación' });
       }
     });
 
-    // --- ENLACES DE GESTIÓN DE DATOS ---
     app.get('/api/teams', async (req, res) => {
       try { const teams = await db.collection('teams').find({}).toArray(); return res.json(teams); } catch (err) { return res.status(500).json({ error: 'Error' }); }
     });
