@@ -13,12 +13,17 @@ const PORT = process.env.PORT || 3001;
 app.use(cors());
 app.use(express.json());
 
-// Configuración de Nodemailer para envíos automáticos desde tu Gmail
+// ✅ CONFIGURACIÓN BLINDADA PARA RENDER (Puerto 465 SSL para evitar ETIMEDOUT)
 const transporter = nodemailer.createTransport({
-  service: 'gmail',
+  host: 'smtp.gmail.com',
+  port: 465,
+  secure: true, // Cifrado SSL nativo
   auth: {
     user: process.env.EMAIL_USER,
     pass: process.env.EMAIL_PASS
+  },
+  tls: {
+    rejectUnauthorized: false // Evita problemas con certificados en entornos de nube
   }
 });
 
@@ -44,21 +49,20 @@ async function startServer() {
       try {
         const { name, email, password } = req.body;
         
-        const userExists = await db.collection('users').findOne({ email });
+        const userExists = await db.collection('users').findOne({ email: email.toLowerCase() });
         if (userExists) {
           return res.status(400).json({ error: 'El correo ya está registrado' });
         }
 
         // CONTROL DE ROLES ESTRICTO:
-        // Tu correo se configura automáticamente como "administrador", todos los demás como "usuario".
         const role = email.toLowerCase() === 'joserty83@gmail.com' ? 'administrador' : 'usuario';
 
         const newUser = { 
           name, 
           email: email.toLowerCase(), 
-          password, // Nota académica: En producción se encripta con bcryptjs
+          password, 
           role, 
-          emailVerified: true, // Se marca verificado al enviarse el token al buzón
+          emailVerified: true, 
           createdAt: new Date() 
         };
         
@@ -91,12 +95,20 @@ async function startServer() {
           `
         };
 
-        await transporter.sendMail(mailOptions);
+        // Intentar enviar el correo electrónico
+        try {
+          await transporter.sendMail(mailOptions);
+        } catch (emailError) {
+          console.error("⚠️ Alerta: No se pudo enviar el correo de bienvenida:", emailError);
+          // No bloqueamos el registro; el usuario se crea igual, pero avisamos en consola del backend
+        }
 
-        res.status(201).json({ success: true, token, user: { name, email: newUser.email, role: newUser.role } });
+        // Siempre responder con éxito si el registro en Base de Datos fue exitoso
+        return res.status(201).json({ success: true, token, user: { name, email: newUser.email, role: newUser.role } });
+
       } catch (err) {
-        console.error(err);
-        res.status(500).json({ error: 'Error al registrar el usuario en MongoDB' });
+        console.error("❌ Error en el servidor al registrar:", err);
+        return res.status(500).json({ error: 'Error interno al registrar el usuario en MongoDB' });
       }
     });
 
@@ -117,25 +129,26 @@ async function startServer() {
           { expiresIn: '24h' }
         );
 
-        res.json({ 
+        return res.json({ 
           success: true, 
           token, 
           user: { name: user.name, email: user.email, role: user.role } 
         });
       } catch (err) {
-        res.status(500).json({ error: 'Error interno en el servidor de autenticación' });
+        console.error("❌ Error en el servidor al loguear:", err);
+        return res.status(500).json({ error: 'Error interno en el servidor de autenticación' });
       }
     });
 
     // --- ENLACES DE GESTIÓN DE DATOS ---
     app.get('/api/teams', async (req, res) => {
-      try { const teams = await db.collection('teams').find({}).toArray(); res.json(teams); } catch (err) { res.status(500).json({ error: 'Error' }); }
+      try { const teams = await db.collection('teams').find({}).toArray(); return res.json(teams); } catch (err) { return res.status(500).json({ error: 'Error' }); }
     });
     app.get('/api/matches', async (req, res) => {
-      try { const matches = await db.collection('matches').find({}).toArray(); res.json(matches); } catch (err) { res.status(500).json({ error: 'Error' }); }
+      try { const matches = await db.collection('matches').find({}).toArray(); return res.json(matches); } catch (err) { return res.status(500).json({ error: 'Error' }); }
     });
     app.get('/api/players', async (req, res) => {
-      try { const players = await db.collection('players').find({}).toArray(); res.json(players); } catch (err) { res.status(500).json({ error: 'Error' }); }
+      try { const players = await db.collection('players').find({}).toArray(); return res.json(players); } catch (err) { return res.status(500).json({ error: 'Error' }); }
     });
 
     app.listen(PORT, () => {
@@ -143,7 +156,7 @@ async function startServer() {
     });
 
   } catch (error) {
-    console.error('❌ Error crítico:', error);
+    console.error('❌ Error crítico de arranque:', error);
     process.exit(1);
   }
 }
