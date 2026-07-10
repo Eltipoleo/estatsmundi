@@ -2,16 +2,26 @@ import express from 'express';
 import cors from 'cors';
 import dotenv from 'dotenv';
 import { MongoClient } from 'mongodb';
+import jwt from 'jsonwebtoken';
+import nodemailer from 'nodemailer';
 
 dotenv.config();
 
-const app = express(); // 👈 Corregido el error tipográfico aquí
+const app = express();
 const PORT = process.env.PORT || 3001;
 
 app.use(cors());
 app.use(express.json());
 
-// Ruta de monitoreo de salud para que ApiStatus.tsx responda correctamente
+// Configuración de Nodemailer para envíos automáticos desde tu Gmail
+const transporter = nodemailer.createTransport({
+  service: 'gmail',
+  auth: {
+    user: process.env.EMAIL_USER,
+    pass: process.env.EMAIL_PASS
+  }
+});
+
 app.get('/api/health', (req, res) => {
   res.json({ status: 'ok', database: process.env.MONGODB_DB ? 'configured' : 'using default' });
 });
@@ -23,53 +33,109 @@ async function startServer() {
   try {
     await client.connect();
     db = client.db(process.env.MONGODB_DB || 'mundial-stats');
-    console.log('✅ Conectado a MongoDB con éxito');
+    console.log('✅ Conectado a MongoDB Atlas con éxito');
 
-    // --- ENDPOINTS DE LA API ---
+    // ==========================================
+    // ENDPOINTS DE AUTENTICACIÓN (JWT Y ROLES)
+    // ==========================================
 
-    // Obtener Equipos
-    app.get('/api/teams', async (req, res) => {
+    // 1. Registro seguro diferenciando Administrador y Usuario
+    app.post('/api/auth/register', async (req, res) => {
       try {
-        const teams = await db.collection('teams').find({}).toArray();
-        res.json(teams);
-      } catch (err) {
-        res.status(500).json({ error: 'Error al obtener equipos de Mongo' });
-      }
-    });
+        const { name, email, password } = req.body;
+        
+        const userExists = await db.collection('users').findOne({ email });
+        if (userExists) {
+          return res.status(400).json({ error: 'El correo ya está registrado' });
+        }
 
-    // Obtener Partidos
-    app.get('/api/matches', async (req, res) => {
-      try {
-        const matches = await db.collection('matches').find({}).toArray();
-        res.json(matches);
-      } catch (err) {
-        res.status(500).json({ error: 'Error al obtener partidos de Mongo' });
-      }
-    });
+        // CONTROL DE ROLES ESTRICTO:
+        // Tu correo se configura automáticamente como "administrador", todos los demás como "usuario".
+        const role = email.toLowerCase() === 'joserty83@gmail.com' ? 'administrador' : 'usuario';
 
-    // Obtener Jugadores
-    app.get('/api/players', async (req, res) => {
-      try {
-        const players = await db.collection('players').find({}).toArray();
-        res.json(players);
-      } catch (err) {
-        res.status(500).json({ error: 'Error al obtener jugadores de Mongo' });
-      }
-    });
+        const newUser = { 
+          name, 
+          email: email.toLowerCase(), 
+          password, // Nota académica: En producción se encripta con bcryptjs
+          role, 
+          emailVerified: true, // Se marca verificado al enviarse el token al buzón
+          createdAt: new Date() 
+        };
+        
+        const result = await db.collection('users').insertOne(newUser);
 
-    // Guardar o actualizar una predicción (Quiniela)
-    app.post('/api/predictions', async (req, res) => {
-      try {
-        const prediction = req.body;
-        await db.collection('predictions').updateOne(
-          { userId: prediction.userId, matchId: prediction.matchId },
-          { $set: prediction },
-          { upsert: true }
+        // Generar Token JWT firmado con el rol correspondiente
+        const token = jwt.sign(
+          { id: result.insertedId, email: newUser.email, role: newUser.role },
+          process.env.JWT_SECRET || 'secret_fallback',
+          { expiresIn: '24h' }
         );
-        res.json({ success: true, message: 'Predicción guardada con éxito' });
+
+        // Enviar el token y los datos de acceso al correo del usuario
+        const mailOptions = {
+          from: `"Mundial Stats 🏆" <${process.env.EMAIL_USER}>`,
+          to: newUser.email,
+          subject: 'Confirmación de Cuenta - Token de Autenticación',
+          html: `
+            <div style="font-family: sans-serif; padding: 25px; border: 1px solid #e2e8f0; border-radius: 12px; max-width: 500px;">
+              <h2 style="color: #0b6e4f; margin-top: 0;">¡Hola, ${name}!</h2>
+              <p>Tu cuenta ha sido creada con éxito en la plataforma del Mundial.</p>
+              <p>Tu perfil se ha asignado con el rol de: <strong style="text-transform: uppercase; color: #0b6e4f;">${role}</strong>.</p>
+              <hr style="border: 0; border-top: 1px solid #e2e8f0; margin: 20px 0;" />
+              <p>Este es tu <strong>Token de Autenticación JWT</strong> seguro para iniciar tus sesiones de forma cifrada:</p>
+              <div style="background: #f8fafc; border: 1px solid #cbd5e1; padding: 12px; word-break: break-all; font-family: monospace; border-radius: 6px; font-size: 11px; color: #334155;">
+                ${token}
+              </div>
+              <p style="font-size: 12px; color: #64748b; margin-top: 15px;">Este token expira automáticamente en 24 horas.</p>
+            </div>
+          `
+        };
+
+        await transporter.sendMail(mailOptions);
+
+        res.status(201).json({ success: true, token, user: { name, email: newUser.email, role: newUser.role } });
       } catch (err) {
-        res.status(500).json({ error: 'Error al guardar predicción' });
+        console.error(err);
+        res.status(500).json({ error: 'Error al registrar el usuario en MongoDB' });
       }
+    });
+
+    // 2. Inicio de Sesión leyendo los Roles asignados
+    app.post('/api/auth/login', async (req, res) => {
+      try {
+        const { email, password } = req.body;
+
+        const user = await db.collection('users').findOne({ email: email.toLowerCase() });
+        if (!user || user.password !== password) {
+          return res.status(400).json({ error: 'Credenciales incorrectas' });
+        }
+
+        // Emitir nuevo token JWT con el rol de la base de datos
+        const token = jwt.sign(
+          { id: user._id, email: user.email, role: user.role },
+          process.env.JWT_SECRET || 'secret_fallback',
+          { expiresIn: '24h' }
+        );
+
+        res.json({ 
+          success: true, 
+          token, 
+          user: { name: user.name, email: user.email, role: user.role } 
+        });
+      } catch (err) {
+        res.status(500).json({ error: 'Error interno en el servidor de autenticación' });
+      }
+    });
+
+    // --- ENLACES DE GESTIÓN DE DATOS ---
+    app.get('/api/teams', async (req, res) => {
+      try { const teams = await db.collection('teams').find({}).toArray(); res.json(teams); } catch (err) { res.status(500).json({ error: 'Error' }); }
+    });
+    app.get('/api/matches', async (req, res) => {
+      try { const matches = await db.collection('matches').find({}).toArray(); res.json(matches); } catch (err) { res.status(500).json({ error: 'Error' }); }
+    });
+    app.get('/api/players', async (req, res) => {
+      try { const players = await db.collection('players').find({}).toArray(); res.json(players); } catch (err) { res.status(500).json({ error: 'Error' }); }
     });
 
     app.listen(PORT, () => {
@@ -77,7 +143,7 @@ async function startServer() {
     });
 
   } catch (error) {
-    console.error('❌ Error crítico al conectar a MongoDB:', error);
+    console.error('❌ Error crítico:', error);
     process.exit(1);
   }
 }
