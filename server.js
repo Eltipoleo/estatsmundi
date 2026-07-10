@@ -13,20 +13,21 @@ const PORT = process.env.PORT || 3001;
 app.use(cors());
 app.use(express.json());
 
-// ✅ CONFIGURACIÓN BLINDADA PARA RENDER (Puerto 465 SSL para evitar ETIMEDOUT)
+// ✅ CONFIGURACIÓN CONFIGURADA PARA PROTOCOLO SEGURO EN NUBE
 const transporter = nodemailer.createTransport({
   host: 'smtp.gmail.com',
   port: 465,
-  secure: true, // Cifrado SSL nativo
+  secure: true, // Usar cifrado SSL nativo
   auth: {
     user: process.env.EMAIL_USER,
     pass: process.env.EMAIL_PASS
   },
   tls: {
-    rejectUnauthorized: false // Evita problemas con certificados en entornos de nube
+    rejectUnauthorized: false // Evita bloqueos por certificados SSL en la nube
   }
 });
 
+// Endpoint de verificación de estado
 app.get('/api/health', (req, res) => {
   res.json({ status: 'ok', database: process.env.MONGODB_DB ? 'configured' : 'using default' });
 });
@@ -44,7 +45,7 @@ async function startServer() {
     // ENDPOINTS DE AUTENTICACIÓN (JWT Y ROLES)
     // ==========================================
 
-    // 1. Registro seguro diferenciando Administrador y Usuario
+    // 1. Registro seguro (Diferenciando Administrador y Usuario de forma asíncrona)
     app.post('/api/auth/register', async (req, res) => {
       try {
         const { name, email, password } = req.body;
@@ -75,7 +76,7 @@ async function startServer() {
           { expiresIn: '24h' }
         );
 
-        // Enviar el token y los datos de acceso al correo del usuario
+        // Diseñar correo electrónico con el Token JWT
         const mailOptions = {
           from: `"Mundial Stats 🏆" <${process.env.EMAIL_USER}>`,
           to: newUser.email,
@@ -95,15 +96,13 @@ async function startServer() {
           `
         };
 
-        // Intentar enviar el correo electrónico
-        try {
-          await transporter.sendMail(mailOptions);
-        } catch (emailError) {
-          console.error("⚠️ Alerta: No se pudo enviar el correo de bienvenida:", emailError);
-          // No bloqueamos el registro; el usuario se crea igual, pero avisamos en consola del backend
-        }
+        // 🔥 BLINDAJE CRÍTICO: Quitamos el 'await' para que se mande en segundo plano.
+        // Si la red de Render bloquea el envío o tarda en responder, NO congelará la pantalla del usuario.
+        transporter.sendMail(mailOptions).catch(emailError => {
+          console.error("⚠️ Alerta en segundo plano: No se pudo enviar el correo:", emailError.message);
+        });
 
-        // Siempre responder con éxito si el registro en Base de Datos fue exitoso
+        // Responder con éxito inmediato al frontend
         return res.status(201).json({ success: true, token, user: { name, email: newUser.email, role: newUser.role } });
 
       } catch (err) {
@@ -122,7 +121,7 @@ async function startServer() {
           return res.status(400).json({ error: 'Credenciales incorrectas' });
         }
 
-        // Emitir nuevo token JWT con el rol de la base de datos
+        // Emitir nuevo token JWT con el rol guardado en la base de datos
         const token = jwt.sign(
           { id: user._id, email: user.email, role: user.role },
           process.env.JWT_SECRET || 'secret_fallback',
